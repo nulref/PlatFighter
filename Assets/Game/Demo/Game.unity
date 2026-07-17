@@ -222,7 +222,6 @@ GameObject:
   m_Component:
   - component: {fileID: 92}
   - component: {fileID: 93}
-  - component: {fileID: 109}
   - component: {fileID: 112}
   - component: {fileID: 108}
   - component: {fileID: 115}
@@ -668,13 +667,6 @@ BoxCollider:
   m_Center: {x: 0, y: 0, z: 0}
 --- !u!81 &108
 AudioListener:
-  m_ObjectHideFlags: 0
-  m_PrefabParentObject: {fileID: 0}
-  m_PrefabInternal: {fileID: 0}
-  m_GameObject: {fileID: 48}
-  m_Enabled: 1
---- !u!92 &109
-Behaviour:
   m_ObjectHideFlags: 0
   m_PrefabParentObject: {fileID: 0}
   m_PrefabInternal: {fileID: 0}

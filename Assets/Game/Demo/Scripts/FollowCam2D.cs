@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.InputSystem;
 using System.Collections;
 
 public class FollowCam2D : MonoBehaviour
@@ -19,7 +20,8 @@ public class FollowCam2D : MonoBehaviour
 	{
 		if (target)
 		{
-			if (Input.GetKey(KeyCode.LeftControl))
+			Keyboard keyboard = Keyboard.current;
+			if (keyboard != null && keyboard.leftCtrlKey.isPressed)
 				distance = origDist * 5;
 			else
 				distance = origDist;

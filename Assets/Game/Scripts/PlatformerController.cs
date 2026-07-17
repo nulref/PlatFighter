@@ -1,4 +1,6 @@
 using UnityEngine;
+using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.Controls;
 using System.Collections;
 
 public class PlatformerController : MonoBehaviour
@@ -8,8 +10,6 @@ public class PlatformerController : MonoBehaviour
 	public float slideStickDeadZone = 0.65f;
 	public float slideAngleTolerance = 25.0f;
 	public float slideDownReleaseThreshold = 0.35f;
-	public string dPadHorizontalAxis = "XboxDPadX";
-	public string dPadVerticalAxis = "XboxDPadY";
 	public float dPadDeadZone = 0.5f;
 
 	const float RightSlideAngle = 135.0f;
@@ -20,6 +20,8 @@ public class PlatformerController : MonoBehaviour
 	bool mControllerSlideActive;
 	bool mTaunting;
 	bool mDPadPressedLastFrame;
+	bool mSprintHeldLastFrame;
+	bool mKeyboardCrouchHeldLastFrame;
 
 	void Start () 
 	{
@@ -43,17 +45,23 @@ public class PlatformerController : MonoBehaviour
 		if (mTaunting)
 			return;
 
-		if (Input.GetKeyDown(KeyCode.LeftShift) || Input.GetKeyDown(KeyCode.RightShift))
+		bool sprintHeld = IsSprintHeld();
+		bool keyboardCrouchHeld = IsKeyboardCrouchHeld();
+
+		if (sprintHeld && !mSprintHeldLastFrame)
 			mPlayer.StartSprint();
 
-		if (Input.GetKeyUp(KeyCode.LeftShift) || Input.GetKeyUp(KeyCode.RightShift))
+		if (!sprintHeld && mSprintHeldLastFrame)
 			mPlayer.StopSprint();
 
-		if (Input.GetKeyDown(KeyCode.S) || Input.GetKeyDown(KeyCode.DownArrow))
+		if (keyboardCrouchHeld && !mKeyboardCrouchHeldLastFrame)
 			mPlayer.Crouch();
 
-		if ((Input.GetKeyUp(KeyCode.S) || Input.GetKeyUp(KeyCode.DownArrow)) && !mControllerSlideActive)
+		if (!keyboardCrouchHeld && mKeyboardCrouchHeldLastFrame && !mControllerSlideActive)
 			mPlayer.UnCrouch();
+
+		mSprintHeldLastFrame = sprintHeld;
+		mKeyboardCrouchHeldLastFrame = keyboardCrouchHeld;
 
 		bool controllerSlideRequested = IsSlideGesture(movementInput);
 		if (controllerSlideRequested)
@@ -99,17 +107,55 @@ public class PlatformerController : MonoBehaviour
 	}
 
 	public void GiveControl() { mHasControl = true; }
-	public void RemoveControl() { StopTaunt(); mHasControl = false; }
+	public void RemoveControl()
+	{
+		StopTaunt();
+		mHasControl = false;
+		mDPadPressedLastFrame = false;
+		mSprintHeldLastFrame = false;
+		mKeyboardCrouchHeldLastFrame = false;
+	}
 	public bool HasControl() { return mHasControl; }
 
 	Vector2 ReadMovementInput()
 	{
-		return new Vector2(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical"));
+		Vector2 input = Vector2.zero;
+		Keyboard keyboard = Keyboard.current;
+		if (keyboard != null)
+		{
+			if (IsPressed(keyboard.leftArrowKey) || IsPressed(keyboard.aKey))
+				input.x -= 1.0f;
+			if (IsPressed(keyboard.rightArrowKey) || IsPressed(keyboard.dKey))
+				input.x += 1.0f;
+			if (IsPressed(keyboard.downArrowKey) || IsPressed(keyboard.sKey))
+				input.y -= 1.0f;
+			if (IsPressed(keyboard.upArrowKey) || IsPressed(keyboard.wKey))
+				input.y += 1.0f;
+		}
+
+		Gamepad gamepad = Gamepad.current;
+		if (gamepad != null)
+		{
+			Vector2 stickInput = gamepad.leftStick.ReadValue();
+			if (Mathf.Abs(stickInput.x) > movementDeadZone)
+				input.x += stickInput.x;
+			if (Mathf.Abs(stickInput.y) > movementDeadZone)
+				input.y += stickInput.y;
+		}
+
+		input.x = Mathf.Clamp(input.x, -1.0f, 1.0f);
+		input.y = Mathf.Clamp(input.y, -1.0f, 1.0f);
+		return input;
 	}
 
 	bool IsJumpHeld(Vector2 movementInput)
 	{
-		if (Input.GetButton("Jump"))
+		Keyboard keyboard = Keyboard.current;
+		if (keyboard != null && IsPressed(keyboard.spaceKey))
+			return true;
+
+		Gamepad gamepad = Gamepad.current;
+		if (gamepad != null && IsPressed(gamepad.buttonNorth))
 			return true;
 
 		return enableThumbstickUpJump && movementInput.y > 0.8f && Mathf.Abs(movementInput.x) < 0.5f;
@@ -122,7 +168,14 @@ public class PlatformerController : MonoBehaviour
 
 	bool IsKeyboardCrouchHeld()
 	{
-		return Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.DownArrow);
+		Keyboard keyboard = Keyboard.current;
+		return keyboard != null && (IsPressed(keyboard.sKey) || IsPressed(keyboard.downArrowKey));
+	}
+
+	bool IsSprintHeld()
+	{
+		Keyboard keyboard = Keyboard.current;
+		return keyboard != null && (IsPressed(keyboard.leftShiftKey) || IsPressed(keyboard.rightShiftKey));
 	}
 
 	bool IsStickDownHeld(Vector2 movementInput)
@@ -163,15 +216,16 @@ public class PlatformerController : MonoBehaviour
 
 	bool IsDPadPressed()
 	{
-		float dPadX = string.IsNullOrEmpty(dPadHorizontalAxis) ? 0.0f : Input.GetAxisRaw(dPadHorizontalAxis);
-		float dPadY = string.IsNullOrEmpty(dPadVerticalAxis) ? 0.0f : Input.GetAxisRaw(dPadVerticalAxis);
+		Gamepad gamepad = Gamepad.current;
+		if (gamepad == null)
+			return false;
 
-		return Mathf.Abs(dPadX) > dPadDeadZone ||
-			Mathf.Abs(dPadY) > dPadDeadZone ||
-			Input.GetKey(KeyCode.JoystickButton10) ||
-			Input.GetKey(KeyCode.JoystickButton11) ||
-			Input.GetKey(KeyCode.JoystickButton12) ||
-			Input.GetKey(KeyCode.JoystickButton13);
+		return gamepad.dpad.ReadValue().sqrMagnitude > dPadDeadZone * dPadDeadZone;
+	}
+
+	bool IsPressed(ButtonControl control)
+	{
+		return control != null && control.isPressed;
 	}
 
 	void StartTaunt()
