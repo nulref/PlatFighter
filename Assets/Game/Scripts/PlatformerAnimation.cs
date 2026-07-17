@@ -24,6 +24,8 @@ public class PlatformerAnimation : MonoBehaviour
 	public float walkPlaybackScale = 0.075f;
 	public bool holdSlideWhileCrouching = true;
 	public float slideHoldNormalizedTime = 0.5f;
+	[Tooltip("Visual-only local offset applied to the animated model while sliding.")]
+	public Vector3 slideModelOffset = new Vector3(0.0f, -0.55f, 0.0f);
 
 	Animation mLegacyAnimation;
 	Rigidbody mRigidbody;
@@ -34,6 +36,7 @@ public class PlatformerAnimation : MonoBehaviour
 	bool mAnimatorPaused = false;
 	bool mTaunting = false;
 	float mAnimatorSpeedBeforePause = 1.0f;
+	Vector3 mBaseModelLocalPosition = Vector3.zero;
 	string mCurrentAnimatorState = "";
 
 	bool mHasSpeedParameter = false;
@@ -65,6 +68,8 @@ public class PlatformerAnimation : MonoBehaviour
 			enabled = false;
 			return;
 		}
+
+		mBaseModelLocalPosition = animatedPlayerModel.transform.localPosition;
 
 		if (preferAnimator && StartAnimatorMode())
 			return;
@@ -197,12 +202,14 @@ public class PlatformerAnimation : MonoBehaviour
 
 		if (mTaunting)
 		{
+			ResetModelOffset();
 			PlayAnimatorState(tauntState, crossFadeTime, false);
 			return;
 		}
 
 		if (crouching)
 		{
+			ApplyModelOffset(slideModelOffset);
 			UpdateCrouchHold();
 			return;
 		}
@@ -214,6 +221,8 @@ public class PlatformerAnimation : MonoBehaviour
 			PlayAnimatorState(wallState, crossFadeTime, false);
 			return;
 		}
+
+		ResetModelOffset();
 
 		if (!grounded)
 		{
@@ -240,6 +249,7 @@ public class PlatformerAnimation : MonoBehaviour
 
 		if (mTaunting)
 		{
+			ResetModelOffset();
 			if (mLegacyAnimation[tauntState] != null && !mLegacyAnimation[tauntState].enabled)
 				PlayLegacyAnimation(tauntState);
 
@@ -339,7 +349,7 @@ public class PlatformerAnimation : MonoBehaviour
 		if (!mPlayerDead && mLegacyAnimation != null && mLegacyAnimation[animName] != null)
 		{
 			mLegacyAnimation.Play(animName);
-			animatedPlayerModel.transform.localPosition = Vector3.zero; //reset any position change made by on wall anim
+			ResetModelOffset();
 		}
 	}
 
@@ -354,6 +364,7 @@ public class PlatformerAnimation : MonoBehaviour
 			return;
 		}
 
+		ResetModelOffset();
 		PlayLegacyAnimation("walk");
 	}
 
@@ -374,6 +385,7 @@ public class PlatformerAnimation : MonoBehaviour
 	public void PlayerDied()
 	{
 		mTaunting = false;
+		ResetModelOffset();
 
 		if (mUseAnimator)
 		{
@@ -393,6 +405,7 @@ public class PlatformerAnimation : MonoBehaviour
 		GoRight();
 		ResumeAnimator();
 		mTaunting = false;
+		ResetModelOffset();
 		mPlayerDead = false;
 		SetAnimatorBool(mHasDeadParameter, DeadHash, false);
 		PlayLocomotionState();
@@ -402,12 +415,14 @@ public class PlatformerAnimation : MonoBehaviour
 	void StartedJump()
 	{
 		mTaunting = false;
+		ResetModelOffset();
 		PlayAnimation(jumpState);
 	}
 
 	void StartedWallJump()
 	{
 		mTaunting = false;
+		ResetModelOffset();
 		PlayAnimation(jumpState);
 	}
 
@@ -416,13 +431,21 @@ public class PlatformerAnimation : MonoBehaviour
 		mTaunting = false;
 
 		if (mUseAnimator)
+		{
+			ApplyModelOffset(slideModelOffset);
 			PlayAnimatorState(slideInState, crossFadeTime, true);
+		}
 		else
+		{
 			PlayLegacyAnimation("slidein");
+			ApplyModelOffset(slideModelOffset);
+		}
 	}
 
 	void StoppedCrouching()
 	{
+		ResetModelOffset();
+
 		if (mUseAnimator)
 		{
 			ResumeAnimator();
@@ -443,7 +466,10 @@ public class PlatformerAnimation : MonoBehaviour
 	void LandedOnGround()
 	{
 		if (!mTaunting && mPhysics != null && !mPhysics.IsCrouching())
+		{
+			ResetModelOffset();
 			PlayLocomotionState();
+		}
 	}
 
 	void LandedOnWall()
@@ -457,12 +483,12 @@ public class PlatformerAnimation : MonoBehaviour
 
 			if (!mPhysics.IsWallOnRightSide())
 			{
-				animatedPlayerModel.transform.localPosition = new Vector3(0.45f, 0, 0);
+				ApplyModelOffset(new Vector3(0.45f, 0, 0));
 				GoLeft();
 			}
 			else
 			{
-				animatedPlayerModel.transform.localPosition = new Vector3(-0.45f, 0, 0);
+				ApplyModelOffset(new Vector3(-0.45f, 0, 0));
 				GoRight();
 			}
 		}
@@ -472,6 +498,8 @@ public class PlatformerAnimation : MonoBehaviour
 	{
 		if (mTaunting)
 			return;
+
+		ResetModelOffset();
 
 		if (mUseAnimator)
 		{
@@ -502,7 +530,7 @@ public class PlatformerAnimation : MonoBehaviour
 		mTaunting = true;
 
 		if (animatedPlayerModel != null)
-			animatedPlayerModel.transform.localPosition = Vector3.zero;
+			ResetModelOffset();
 
 		PlayAnimation(tauntState);
 	}
@@ -515,5 +543,16 @@ public class PlatformerAnimation : MonoBehaviour
 		mTaunting = false;
 		ResumeAnimator();
 		PlayLocomotionState();
+	}
+
+	void ApplyModelOffset(Vector3 offset)
+	{
+		if (animatedPlayerModel != null)
+			animatedPlayerModel.transform.localPosition = mBaseModelLocalPosition + offset;
+	}
+
+	void ResetModelOffset()
+	{
+		ApplyModelOffset(Vector3.zero);
 	}
 }
