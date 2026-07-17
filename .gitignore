@@ -1,0 +1,45 @@
+# Unity generated files
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+
+# Unity crash and profiler output
+sysinfo.txt
+*.stackdump
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+
+# Unity cache artifacts
+*.csproj
+*.sln
+*.suo
+*.user
+*.userprefs
+*.pidb.meta
+*.pdb.meta
+*.mdb.meta
+
+# Visual Studio / Rider
+.vs/
+.idea/
+*.rsuser
+
+# OS cruft
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Local migration/validation logs
+unity*.log
+
+# Raw/generated character source assets kept outside the Unity project
+platfighters/
