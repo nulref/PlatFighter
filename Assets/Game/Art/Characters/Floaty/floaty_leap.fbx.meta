@@ -1,6 +1,6 @@
 fileFormatVersion: 2
-guid: 9ccf2cb20e5afcd44af9586e516ba52f
-timeCreated: 1784084728
+guid: bc711e94863349d419510ac824f26740
+timeCreated: 1784103835
 licenseType: Free
 ModelImporter:
   serializedVersion: 19
@@ -91,8 +91,7 @@ ModelImporter:
     4300010: Mesh_0.001_MeshPart5
     4300012: Mesh_0.001_MeshPart6
     4300014: Mesh_0.001_MeshPart7
-    7400000: Armature|a061c179817a15c4791562a3eb0691cf_remap
-    7400002: slide
+    7400000: Armature|4896d2a0a9654d396fec8119542b37e7_remap
     9500000: //RootNode
     13700000: Mesh_0.001_MeshPart0
     13700002: Mesh_0.001_MeshPart1
@@ -124,39 +123,11 @@ ModelImporter:
     animationScaleError: 0.5
     animationWrapMode: 0
     extraExposedTransformPaths: []
-    clipAnimations:
-    - serializedVersion: 16
-      name: slide
-      takeName: Armature|a061c179817a15c4791562a3eb0691cf_remap
-      firstFrame: 0
-      lastFrame: 106
-      wrapMode: 0
-      orientationOffsetY: 0
-      level: 0
-      cycleOffset: 0
-      loop: 0
-      hasAdditiveReferencePose: 0
-      loopTime: 0
-      loopBlend: 0
-      loopBlendOrientation: 0
-      loopBlendPositionY: 0
-      loopBlendPositionXZ: 0
-      keepOriginalOrientation: 0
-      keepOriginalPositionY: 1
-      keepOriginalPositionXZ: 0
-      heightFromFeet: 0
-      mirror: 0
-      bodyMask: 01000000010000000100000001000000010000000100000001000000010000000100000001000000010000000100000001000000
-      curves: []
-      events: []
-      transformMask: []
-      maskType: 3
-      maskSource: {instanceID: 0}
-      additiveReferencePoseFrame: 0
+    clipAnimations: []
     isReadable: 1
   meshes:
     lODScreenPercentages: []
-    globalScale: 1
+    globalScale: 3
     meshCompression: 0
     addColliders: 0
     importBlendShapes: 1

@@ -1,6 +1,6 @@
 fileFormatVersion: 2
-guid: e2465a4ba8b677e4a8e0067874ea1f10
-timeCreated: 1784084615
+guid: eec786b501337574284018f5dc07e882
+timeCreated: 1784103945
 licenseType: Free
 ModelImporter:
   serializedVersion: 19
@@ -91,8 +91,7 @@ ModelImporter:
     4300010: Mesh_0.001_MeshPart5
     4300012: Mesh_0.001_MeshPart6
     4300014: Mesh_0.001_MeshPart7
-    7400000: Armature|97951ef0dcaa4ab43833ce511daa5b4d_remap
-    7400002: walk
+    7400000: Armature|0c0fb13ef0ea83c07d4fd34143bc58ef_remap
     9500000: //RootNode
     13700000: Mesh_0.001_MeshPart0
     13700002: Mesh_0.001_MeshPart1
@@ -122,41 +121,13 @@ ModelImporter:
     animationRotationError: 0.5
     animationPositionError: 0.5
     animationScaleError: 0.5
-    animationWrapMode: 2
+    animationWrapMode: 0
     extraExposedTransformPaths: []
-    clipAnimations:
-    - serializedVersion: 16
-      name: walk
-      takeName: Armature|97951ef0dcaa4ab43833ce511daa5b4d_remap
-      firstFrame: 0
-      lastFrame: 157
-      wrapMode: 2
-      orientationOffsetY: 0
-      level: 0
-      cycleOffset: 0
-      loop: 0
-      hasAdditiveReferencePose: 0
-      loopTime: 1
-      loopBlend: 0
-      loopBlendOrientation: 0
-      loopBlendPositionY: 0
-      loopBlendPositionXZ: 0
-      keepOriginalOrientation: 0
-      keepOriginalPositionY: 1
-      keepOriginalPositionXZ: 0
-      heightFromFeet: 0
-      mirror: 0
-      bodyMask: 01000000010000000100000001000000010000000100000001000000010000000100000001000000010000000100000001000000
-      curves: []
-      events: []
-      transformMask: []
-      maskType: 3
-      maskSource: {instanceID: 0}
-      additiveReferencePoseFrame: 0
+    clipAnimations: []
     isReadable: 1
   meshes:
     lODScreenPercentages: []
-    globalScale: 1
+    globalScale: 3
     meshCompression: 0
     addColliders: 0
     importBlendShapes: 1

@@ -25,7 +25,7 @@ public class PlatformerAnimation : MonoBehaviour
 	public bool holdSlideWhileCrouching = true;
 	public float slideHoldNormalizedTime = 0.5f;
 	[Tooltip("Visual-only local offset applied to the animated model while sliding.")]
-	public Vector3 slideModelOffset = new Vector3(0.0f, -0.55f, 0.0f);
+	public Vector3 slideModelOffset = new Vector3(0.0f, -1.26f, 0.0f);
 
 	Animation mLegacyAnimation;
 	Rigidbody mRigidbody;

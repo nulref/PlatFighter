@@ -5,9 +5,11 @@ using UnityEditor.SceneManagement;
 
 public static class FloatyMecanimMigrator
 {
-	const string FloatyFolder = "Assets/Game/Demo/Models/floaty";
+	const string FloatyFolder = "Assets/Game/Art/Characters/Floaty";
+	const string FloatyMaterialPath = "Assets/Game/Art/Materials/Floaty.mat";
 	const string ControllerPath = FloatyFolder + "/Floaty.controller";
 	const string PlayerName = "Player";
+	const float FloatySlideModelOffsetY = -1.26f;
 
 	struct FloatyClip
 	{
@@ -209,10 +211,12 @@ public static class FloatyMecanimMigrator
 			platformerAnimation.animatedPlayerAnimator = animator;
 			platformerAnimation.animatorController = controller;
 			platformerAnimation.preferAnimator = true;
+			platformerAnimation.slideModelOffset = new Vector3(0.0f, FloatySlideModelOffsetY, 0.0f);
 			EditorUtility.SetDirty(platformerAnimation);
 		}
 
 		DisableOldNinja(player.transform, floaty.transform);
+		ApplyFloatyMaterial(floaty);
 		EditorUtility.SetDirty(floaty);
 		return floaty;
 	}
@@ -236,6 +240,28 @@ public static class FloatyMecanimMigrator
 		floaty.transform.localRotation = Quaternion.Euler(0, 90, 0);
 		floaty.transform.localScale = Vector3.one;
 		return floaty;
+	}
+
+	static void ApplyFloatyMaterial(GameObject floaty)
+	{
+		Material material = AssetDatabase.LoadAssetAtPath<Material>(FloatyMaterialPath);
+		if (material == null)
+		{
+			Debug.LogWarning("Could not load Floaty material at " + FloatyMaterialPath + ".");
+			return;
+		}
+
+		Renderer[] renderers = floaty.GetComponentsInChildren<Renderer>(true);
+		for (int i = 0; i < renderers.Length; i++)
+		{
+			Material[] materials = renderers[i].sharedMaterials;
+			for (int materialIndex = 0; materialIndex < materials.Length; materialIndex++)
+				materials[materialIndex] = material;
+
+			renderers[i].sharedMaterials = materials;
+			PrefabUtility.RecordPrefabInstancePropertyModifications(renderers[i]);
+			EditorUtility.SetDirty(renderers[i]);
+		}
 	}
 
 	static void DisableOldNinja(Transform playerTransform, Transform floatyTransform)

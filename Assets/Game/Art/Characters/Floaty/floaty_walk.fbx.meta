@@ -1,6 +1,6 @@
 fileFormatVersion: 2
-guid: 9d8a5c6bb0a3448a9f9ad37c4e65f251
-timeCreated: 1784329560
+guid: e2465a4ba8b677e4a8e0067874ea1f10
+timeCreated: 1784084615
 licenseType: Free
 ModelImporter:
   serializedVersion: 19
@@ -91,8 +91,8 @@ ModelImporter:
     4300010: Mesh_0.001_MeshPart5
     4300012: Mesh_0.001_MeshPart6
     4300014: Mesh_0.001_MeshPart7
-    7400000: Armature|25551db2377afb7519575ae34899e144_remap
-    7400002: taunt
+    7400000: Armature|97951ef0dcaa4ab43833ce511daa5b4d_remap
+    7400002: walk
     9500000: //RootNode
     13700000: Mesh_0.001_MeshPart0
     13700002: Mesh_0.001_MeshPart1
@@ -126,10 +126,10 @@ ModelImporter:
     extraExposedTransformPaths: []
     clipAnimations:
     - serializedVersion: 16
-      name: taunt
-      takeName: Armature|25551db2377afb7519575ae34899e144_remap
+      name: walk
+      takeName: Armature|97951ef0dcaa4ab43833ce511daa5b4d_remap
       firstFrame: 0
-      lastFrame: 124
+      lastFrame: 157
       wrapMode: 2
       orientationOffsetY: 0
       level: 0
@@ -156,7 +156,7 @@ ModelImporter:
     isReadable: 1
   meshes:
     lODScreenPercentages: []
-    globalScale: 1
+    globalScale: 3
     meshCompression: 0
     addColliders: 0
     importBlendShapes: 1

@@ -1,6 +1,6 @@
 fileFormatVersion: 2
-guid: bc711e94863349d419510ac824f26740
-timeCreated: 1784103835
+guid: 9d8a5c6bb0a3448a9f9ad37c4e65f251
+timeCreated: 1784329560
 licenseType: Free
 ModelImporter:
   serializedVersion: 19
@@ -91,7 +91,8 @@ ModelImporter:
     4300010: Mesh_0.001_MeshPart5
     4300012: Mesh_0.001_MeshPart6
     4300014: Mesh_0.001_MeshPart7
-    7400000: Armature|4896d2a0a9654d396fec8119542b37e7_remap
+    7400000: Armature|25551db2377afb7519575ae34899e144_remap
+    7400002: taunt
     9500000: //RootNode
     13700000: Mesh_0.001_MeshPart0
     13700002: Mesh_0.001_MeshPart1
@@ -121,13 +122,41 @@ ModelImporter:
     animationRotationError: 0.5
     animationPositionError: 0.5
     animationScaleError: 0.5
-    animationWrapMode: 0
+    animationWrapMode: 2
     extraExposedTransformPaths: []
-    clipAnimations: []
+    clipAnimations:
+    - serializedVersion: 16
+      name: taunt
+      takeName: Armature|25551db2377afb7519575ae34899e144_remap
+      firstFrame: 0
+      lastFrame: 124
+      wrapMode: 2
+      orientationOffsetY: 0
+      level: 0
+      cycleOffset: 0
+      loop: 0
+      hasAdditiveReferencePose: 0
+      loopTime: 1
+      loopBlend: 0
+      loopBlendOrientation: 0
+      loopBlendPositionY: 0
+      loopBlendPositionXZ: 0
+      keepOriginalOrientation: 0
+      keepOriginalPositionY: 1
+      keepOriginalPositionXZ: 0
+      heightFromFeet: 0
+      mirror: 0
+      bodyMask: 01000000010000000100000001000000010000000100000001000000010000000100000001000000010000000100000001000000
+      curves: []
+      events: []
+      transformMask: []
+      maskType: 3
+      maskSource: {instanceID: 0}
+      additiveReferencePoseFrame: 0
     isReadable: 1
   meshes:
     lODScreenPercentages: []
-    globalScale: 1
+    globalScale: 3
     meshCompression: 0
     addColliders: 0
     importBlendShapes: 1
