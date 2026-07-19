@@ -7663,7 +7663,7 @@ TextMesh:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1592427763}
-  m_Text: You can now double jump!
+  m_Text: Congratulations!! You made it!
   m_OffsetZ: 0
   m_CharacterSize: 1
   m_LineSpacing: 1
