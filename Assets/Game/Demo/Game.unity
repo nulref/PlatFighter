@@ -979,6 +979,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   enableThumbstickUpJump: 0
   movementDeadZone: 0.25
+  jumpBufferTime: 0.12
   slideStickDeadZone: 0.65
   slideAngleTolerance: 25
   slideDownReleaseThreshold: 0.35
@@ -1011,7 +1012,8 @@ MonoBehaviour:
   canDoubleJump: 0
   canWallJump: 1
   wallJumpVelocity: 15
-  wallStickyness: 0.5
+  wallStickyness: 0.12
+  turnaroundAccelMultiplier: 2
   gravityMultiplier: 3.5
 --- !u!196 &119
 NavMeshSettings:

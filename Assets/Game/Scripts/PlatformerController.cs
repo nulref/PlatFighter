@@ -7,6 +7,7 @@ public class PlatformerController : MonoBehaviour
 {
 	public bool enableThumbstickUpJump = false;
 	public float movementDeadZone = 0.25f;
+	public float jumpBufferTime = 0.12f;
 	public float slideStickDeadZone = 0.65f;
 	public float slideAngleTolerance = 25.0f;
 	public float slideDownReleaseThreshold = 0.35f;
@@ -22,6 +23,10 @@ public class PlatformerController : MonoBehaviour
 	bool mDPadPressedLastFrame;
 	bool mSprintHeldLastFrame;
 	bool mKeyboardCrouchHeldLastFrame;
+	bool mJumpHeld;
+	bool mJumpHeldLastFrame;
+	float mJumpBufferTimeLeft;
+	Vector2 mMovementInput;
 
 	void Start () 
 	{
@@ -37,11 +42,10 @@ public class PlatformerController : MonoBehaviour
 		if (!mPlayer || !mHasControl)
 			return;
 
-		Vector2 movementInput = ReadMovementInput();
-		bool jumpHeld = IsJumpHeld(movementInput);
-		bool movementPressed = HasMovementInput(movementInput);
+		UpdateInputState();
+		bool movementPressed = HasMovementInput(mMovementInput);
 
-		HandleTauntInput(movementPressed, jumpHeld);
+		HandleTauntInput(movementPressed, mJumpHeld);
 		if (mTaunting)
 			return;
 
@@ -63,7 +67,7 @@ public class PlatformerController : MonoBehaviour
 		mSprintHeldLastFrame = sprintHeld;
 		mKeyboardCrouchHeldLastFrame = keyboardCrouchHeld;
 
-		bool controllerSlideRequested = IsSlideGesture(movementInput);
+		bool controllerSlideRequested = IsSlideGesture(mMovementInput);
 		if (controllerSlideRequested)
 		{
 			if (!mPlayer.IsCrouching())
@@ -71,7 +75,7 @@ public class PlatformerController : MonoBehaviour
 
 			mControllerSlideActive = true;
 		}
-		else if (mControllerSlideActive && !IsStickDownHeld(movementInput))
+		else if (mControllerSlideActive && !IsStickDownHeld(mMovementInput))
 		{
 			mControllerSlideActive = false;
 			if (!IsKeyboardCrouchHeld())
@@ -84,13 +88,11 @@ public class PlatformerController : MonoBehaviour
 		//here are actions where the buttons can be held for a longer period
 		if (mPlayer && mHasControl)
 		{
-			Vector2 movementInput = ReadMovementInput();
-			bool jumpHeld = IsJumpHeld(movementInput);
-			bool movementPressed = HasMovementInput(movementInput);
+			bool movementPressed = HasMovementInput(mMovementInput);
 
 			if (mTaunting)
 			{
-				if (movementPressed || jumpHeld)
+				if (movementPressed || mJumpHeld)
 					StopTaunt();
 				else
 				{
@@ -99,10 +101,13 @@ public class PlatformerController : MonoBehaviour
 				}
 			}
 
-			if (jumpHeld)
-				mPlayer.Jump();
+			if ((mJumpHeld || mJumpBufferTimeLeft > 0.0f) && mPlayer.Jump())
+				mJumpBufferTimeLeft = 0.0f;
 
-			mPlayer.Walk(movementInput.x);
+			if (mJumpBufferTimeLeft > 0.0f)
+				mJumpBufferTimeLeft = Mathf.Max(0.0f, mJumpBufferTimeLeft - Time.fixedDeltaTime);
+
+			mPlayer.Walk(mMovementInput.x);
 		}
 	}
 
@@ -114,8 +119,23 @@ public class PlatformerController : MonoBehaviour
 		mDPadPressedLastFrame = false;
 		mSprintHeldLastFrame = false;
 		mKeyboardCrouchHeldLastFrame = false;
+		mJumpHeld = false;
+		mJumpHeldLastFrame = false;
+		mJumpBufferTimeLeft = 0.0f;
+		mMovementInput = Vector2.zero;
 	}
 	public bool HasControl() { return mHasControl; }
+
+	void UpdateInputState()
+	{
+		mMovementInput = ReadMovementInput();
+		mJumpHeld = IsJumpHeld(mMovementInput);
+
+		if (IsJumpPressedThisFrame(mMovementInput, mJumpHeld))
+			mJumpBufferTimeLeft = jumpBufferTime;
+
+		mJumpHeldLastFrame = mJumpHeld;
+	}
 
 	Vector2 ReadMovementInput()
 	{
@@ -155,10 +175,23 @@ public class PlatformerController : MonoBehaviour
 			return true;
 
 		Gamepad gamepad = Gamepad.current;
-		if (gamepad != null && IsPressed(gamepad.buttonNorth))
+		if (gamepad != null && (IsPressed(gamepad.buttonSouth) || IsPressed(gamepad.buttonNorth)))
 			return true;
 
 		return enableThumbstickUpJump && movementInput.y > 0.8f && Mathf.Abs(movementInput.x) < 0.5f;
+	}
+
+	bool IsJumpPressedThisFrame(Vector2 movementInput, bool jumpHeld)
+	{
+		Keyboard keyboard = Keyboard.current;
+		if (keyboard != null && WasPressedThisFrame(keyboard.spaceKey))
+			return true;
+
+		Gamepad gamepad = Gamepad.current;
+		if (gamepad != null && (WasPressedThisFrame(gamepad.buttonSouth) || WasPressedThisFrame(gamepad.buttonNorth)))
+			return true;
+
+		return enableThumbstickUpJump && jumpHeld && !mJumpHeldLastFrame;
 	}
 
 	bool HasMovementInput(Vector2 movementInput)
@@ -226,6 +259,11 @@ public class PlatformerController : MonoBehaviour
 	bool IsPressed(ButtonControl control)
 	{
 		return control != null && control.isPressed;
+	}
+
+	bool WasPressedThisFrame(ButtonControl control)
+	{
+		return control != null && control.wasPressedThisFrame;
 	}
 
 	void StartTaunt()

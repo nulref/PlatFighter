@@ -27,7 +27,8 @@ public class PlatformerPhysics : MonoBehaviour
 	public bool canDoubleJump			= false;	//Whether the character can double jump or not
 	public bool canWallJump				= true;		//Whether the character can do a wall jump or not
 	public float wallJumpVelocity		= 15;		//Sideways velocity when doing a walljump
-	public float wallStickyness			= 0.5f;		//Amount of seconds the player has to move away from a wall to let go of it. The idea behind this is that players can press the opposite direction to prepare for a walljump without immediately letting go of the wall
+	public float wallStickyness			= 0.12f;	//Amount of seconds the player has to move away from a wall to let go of it. The idea behind this is that players can press the opposite direction to prepare for a walljump without immediately letting go of the wall
+	public float turnaroundAccelMultiplier = 2.0f;	//Extra horizontal acceleration when the player reverses direction
 	public float gravityMultiplier		= 3.5f;		//Amount of gravity applied to the character compared to the rest of the physics world
 
 
@@ -144,6 +145,8 @@ public class PlatformerPhysics : MonoBehaviour
 			accel = accelerationSprinting;
 		if (mCrouching && mOnGround)
 			accel = accelerationWalking * crouchedAccelMultiplier;
+		if (IsTurningAround(direction))
+			accel *= turnaroundAccelMultiplier;
 
         //apply actual force 
 		GetComponent<Rigidbody>().AddForce(mGroundDirection * direction * accel, ForceMode.Acceleration);
@@ -164,9 +167,10 @@ public class PlatformerPhysics : MonoBehaviour
 
 
     //Called when the player holds down the jump key
-	public void Jump() 
+	public bool Jump()
 	{
 		mJumpPressed = true;
+		bool startedJump = false;
 
 		//See if we can start a jump
 		if (mJumpFramesLeft == 0 && !mInJump && !mCrouching)
@@ -177,6 +181,7 @@ public class PlatformerPhysics : MonoBehaviour
 
 				mJumpFramesLeft = jumpTimeFrames;
 				mInJump = true;
+				startedJump = true;
 
                 SendAnimMessage("StartedJump");
 			}
@@ -187,6 +192,7 @@ public class PlatformerPhysics : MonoBehaviour
 
 				mJumpFramesLeft = jumpTimeFrames;
 				mInJump = true;
+				startedJump = true;
 
 				if (mOnWall) //A wall jump needs sideways velocity as well
 				{
@@ -211,6 +217,8 @@ public class PlatformerPhysics : MonoBehaviour
 			vel.y = jumpVelocity;
 			GetComponent<Rigidbody>().linearVelocity = vel;
 		}
+
+		return startedJump || mJumpFramesLeft != 0;
 	}
 
 
@@ -359,6 +367,15 @@ public class PlatformerPhysics : MonoBehaviour
 		GetComponent<Rigidbody>().linearVelocity = velocity;
 
 		mStoppingForce = 1.0f; //if no walking is done this frame, the character will start stopping next frame
+	}
+
+	bool IsTurningAround(float direction)
+	{
+		if (Mathf.Abs(direction) <= 0.01f)
+			return false;
+
+		float horizontalVelocity = GetComponent<Rigidbody>().linearVelocity.x;
+		return Mathf.Abs(horizontalVelocity) > 0.01f && Mathf.Sign(horizontalVelocity) != Mathf.Sign(direction);
 	}
 
 
