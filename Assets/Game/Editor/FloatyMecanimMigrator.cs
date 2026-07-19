@@ -31,6 +31,7 @@ public static class FloatyMecanimMigrator
 		new FloatyClip("walk", FloatyFolder + "/floaty_walk.fbx", true),
 		new FloatyClip("run", FloatyFolder + "/floaty_run.fbx", true),
 		new FloatyClip("jump", FloatyFolder + "/floaty_jump.fbx", false),
+		new FloatyClip("leap", FloatyFolder + "/floaty_leap.fbx", false),
 		new FloatyClip("slide", FloatyFolder + "/floaty_slide.fbx", false),
 		new FloatyClip("taunt", FloatyFolder + "/floaty_taunt.fbx", true)
 	};

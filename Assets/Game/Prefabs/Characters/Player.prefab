@@ -107,15 +107,15 @@ MonoBehaviour:
   maxGroundWalkingAngle: 30
   crouchColliderScale: 0.5
   crouchedAccelMultiplier: 0.1
-  jumpVelocity: 12
-  jumpTimeFrames: 15
+  jumpVelocity: 20
+  jumpTimeFrames: 5
   crouchDownwardForce: 20
-  canDoubleJump: 0
+  canDoubleJump: 1
   canWallJump: 1
   wallJumpVelocity: 15
-  wallStickyness: 0.12
+  wallStickyness: 0.24
   turnaroundAccelMultiplier: 2
-  gravityMultiplier: 3.5
+  gravityMultiplier: 1.5
 --- !u!114 &5883334386759639520
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -155,6 +155,7 @@ MonoBehaviour:
   walkState: walk
   runState: run
   jumpState: jump
+  doubleJumpState: leap
   slideInState: slide
   slideOutState: slide
   wallState: jump

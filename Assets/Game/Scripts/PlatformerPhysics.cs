@@ -21,13 +21,13 @@ public class PlatformerPhysics : MonoBehaviour
 	public float crouchedAccelMultiplier= 0.1f;		//Maximum speed factor while crouched
 
 	//Configurable variables regarding jumping
-	public float jumpVelocity			= 12;		//Velocity while jumping
-	public int jumpTimeFrames			= 15;		//Amount of frames the jump can be held, the player can release the jump button earlier for a lower jump
+	public float jumpVelocity			= 18;		//Velocity while jumping
+	public int jumpTimeFrames			= 5;		//Amount of frames the jump can be held, the player can release the jump button earlier for a lower jump
 	public float crouchDownwardForce	= 20;		//Extra gravity added to the character if the crouch button is pressed
-	public bool canDoubleJump			= false;	//Whether the character can double jump or not
+	public bool canDoubleJump			= true;		//Whether the character can double jump or not
 	public bool canWallJump				= true;		//Whether the character can do a wall jump or not
 	public float wallJumpVelocity		= 15;		//Sideways velocity when doing a walljump
-	public float wallStickyness			= 0.12f;	//Amount of seconds the player has to move away from a wall to let go of it. The idea behind this is that players can press the opposite direction to prepare for a walljump without immediately letting go of the wall
+	public float wallStickyness			= 0.24f;	//Amount of seconds the player has to move away from a wall to let go of it. The idea behind this is that players can press the opposite direction to prepare for a walljump without immediately letting go of the wall
 	public float turnaroundAccelMultiplier = 2.0f;	//Extra horizontal acceleration when the player reverses direction
 	public float gravityMultiplier		= 3.5f;		//Amount of gravity applied to the character compared to the rest of the physics world
 
@@ -183,7 +183,7 @@ public class PlatformerPhysics : MonoBehaviour
 				mInJump = true;
 				startedJump = true;
 
-                SendAnimMessage("StartedJump");
+				SendAnimMessage("StartedDoubleJump");
 			}
 
 			if (mOnGround || mOnWall) //First jump

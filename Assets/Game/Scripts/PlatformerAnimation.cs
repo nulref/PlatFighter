@@ -12,6 +12,7 @@ public class PlatformerAnimation : MonoBehaviour
 	public string walkState = "walk";
 	public string runState = "run";
 	public string jumpState = "jump";
+	public string doubleJumpState = "leap";
 	public string slideInState = "slide";
 	public string slideOutState = "slide";
 	public string wallState = "jump";
@@ -38,6 +39,7 @@ public class PlatformerAnimation : MonoBehaviour
 	float mAnimatorSpeedBeforePause = 1.0f;
 	Vector3 mBaseModelLocalPosition = Vector3.zero;
 	string mCurrentAnimatorState = "";
+	string mAirborneAnimatorState = "";
 
 	bool mHasSpeedParameter = false;
 	bool mHasNormalizedSpeedParameter = false;
@@ -226,9 +228,12 @@ public class PlatformerAnimation : MonoBehaviour
 
 		if (!grounded)
 		{
-			PlayAnimatorState(jumpState, crossFadeTime, false);
+			string airborneState = string.IsNullOrEmpty(mAirborneAnimatorState) ? jumpState : mAirborneAnimatorState;
+			PlayAnimatorState(airborneState, crossFadeTime, false);
 			return;
 		}
+
+		mAirborneAnimatorState = "";
 
 		if (speed <= idleSpeedThreshold)
 		{
@@ -414,16 +419,29 @@ public class PlatformerAnimation : MonoBehaviour
 	//MESSAGES CALLED BY PlatformerPhysics.cs:
 	void StartedJump()
 	{
-		mTaunting = false;
-		ResetModelOffset();
-		PlayAnimation(jumpState);
+		StartAirborneAnimation(jumpState);
+	}
+
+	void StartedDoubleJump()
+	{
+		StartAirborneAnimation(string.IsNullOrEmpty(doubleJumpState) ? jumpState : doubleJumpState);
 	}
 
 	void StartedWallJump()
 	{
+		StartAirborneAnimation(jumpState);
+	}
+
+	void StartAirborneAnimation(string stateName)
+	{
 		mTaunting = false;
 		ResetModelOffset();
-		PlayAnimation(jumpState);
+		mAirborneAnimatorState = stateName;
+
+		if (mUseAnimator)
+			PlayAnimatorState(stateName, crossFadeTime, true);
+		else
+			PlayLegacyAnimation("jump");
 	}
 
 	void StartedCrouching()
@@ -465,6 +483,8 @@ public class PlatformerAnimation : MonoBehaviour
 
 	void LandedOnGround()
 	{
+		mAirborneAnimatorState = "";
+
 		if (!mTaunting && mPhysics != null && !mPhysics.IsCrouching())
 		{
 			ResetModelOffset();
@@ -476,6 +496,8 @@ public class PlatformerAnimation : MonoBehaviour
 	{
 		if (mTaunting)
 			return;
+
+		mAirborneAnimatorState = "";
 
 		if (mPhysics != null && !mPhysics.IsCrouching())
 		{
