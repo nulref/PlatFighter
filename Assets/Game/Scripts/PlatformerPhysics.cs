@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Serialization;
 using System.Collections;
 
 public class PlatformerPhysics : MonoBehaviour
@@ -13,6 +14,9 @@ public class PlatformerPhysics : MonoBehaviour
 	public float accelerationSprinting	= 60;		//Character acceleration while sprinting
 	public float maxSpeedWalking		= 15;		//Maximum character speed while walking
 	public float maxSpeedSprinting		= 20;		//Maximum character speed while sprinting
+	public float dashSpeed				= 28;		//Horizontal speed applied during a dash
+	public float dashCooldown			= 0.12f;	//Additional delay before another dash can begin
+	public float dashStopSpeedThreshold = 1.0f;	//A blocked dash ends below this horizontal speed
 	public float moveFriction			= 0.9f;		//Friction multiplier if the character is on ground and no moving buttons are pressed
 	public float speedToStopAt			= 5.0f;		//If the character's speed falls below this while being on the ground, the character stops
 	public float airFriction			= 0.98f;	//Air friction is always applied to the character
@@ -23,7 +27,9 @@ public class PlatformerPhysics : MonoBehaviour
 	//Configurable variables regarding jumping
 	public float jumpVelocity			= 18;		//Velocity while jumping
 	public int jumpTimeFrames			= 5;		//Amount of frames the jump can be held, the player can release the jump button earlier for a lower jump
-	public float crouchDownwardForce	= 20;		//Extra gravity added to the character if the crouch button is pressed
+	[FormerlySerializedAs("crouchDownwardForce")]
+	public float fastFallAcceleration	= 20;		//Extra downward acceleration while holding down in the air
+	public float maxFastFallSpeed		= 35;		//Maximum downward speed while fast-falling
 	public bool canDoubleJump			= true;		//Whether the character can double jump or not
 	public bool canWallJump				= true;		//Whether the character can do a wall jump or not
 	public float wallJumpVelocity		= 15;		//Sideways velocity when doing a walljump
@@ -38,6 +44,10 @@ public class PlatformerPhysics : MonoBehaviour
 	bool mSprinting						= false;	//Are we sprinting or not?
 	bool mCrouching						= false;	//Are we crouching or not?
 	bool mTryingToUncrouch				= false;	//Are we trying to get out of crouch at the moment?
+	bool mDashing						= false;
+	bool mFastFallHeld					= false;
+	float mDashCooldownLeft				= 0.0f;
+	float mDashDirection					= 0.0f;
 	Vector3 mGroundDirection			= Vector3.right; //The direction of the ground we are standing on
 
 	bool mInJump						= false;	//Are we in a jump
@@ -50,6 +60,7 @@ public class PlatformerPhysics : MonoBehaviour
 	float mWallStickynessLeft			= 0;		//Amount of seconds left the player needs to press the opposite direction of the wall to let go of it
 
 	float mStoppingForce				= 0;		//This variable holds whether or not a player was moving this frame, if a player doesnt press move, the character will slowly stop
+	float mWalkInput					= 0;		//Current horizontal movement intent after the controller dead zone
 	bool mGoingRight					= true;		//Are we going to the right?
 	
 	float mCharacterHeight;							//Character bounding box height
@@ -88,6 +99,10 @@ public class PlatformerPhysics : MonoBehaviour
 	{
 		mOnGround = false;
 		mSprinting = false;
+		mDashing = false;
+		mFastFallHeld = false;
+		mDashCooldownLeft = 0.0f;
+		mDashDirection = 0.0f;
 		StopCrouch();
 		mGroundDirection = Vector3.right;
 		mInJump = false;
@@ -97,6 +112,7 @@ public class PlatformerPhysics : MonoBehaviour
 		mOnWall = false;
 		mWallIsOnRightSide = false;
 		mStoppingForce = 0;
+		mWalkInput = 0;
 		transform.position = mStartPosition;
 		GetComponent<Rigidbody>().linearVelocity = Vector3.zero;
 		mGoingRight = true;
@@ -114,12 +130,32 @@ public class PlatformerPhysics : MonoBehaviour
 		UpdateCrouching();
 		ApplyGravity();
 		ApplyMovementFriction();
+		UpdateDash();
 	}
-
 
     //Called when the player presses a walking button (direction -1.0f is full left, and 1.0f is full right)
 	public void Walk(float direction) 
 	{
+		mWalkInput = direction;
+
+		if (IsDashing())
+		{
+			bool directionReleased = Mathf.Abs(direction) <= 0.01f;
+			bool directionReversed = !directionReleased && Mathf.Sign(direction) != mDashDirection;
+			if (!directionReleased && !directionReversed)
+				return;
+
+			StopDash();
+			if (directionReleased)
+			{
+				Vector3 stoppedVelocity = GetComponent<Rigidbody>().linearVelocity;
+				stoppedVelocity.x = 0.0f;
+				GetComponent<Rigidbody>().linearVelocity = stoppedVelocity;
+				mStoppingForce = 1.0f;
+				return;
+			}
+		}
+
 		//See if we need to stick to a wall
 		if (mOnWall && mWallStickynessLeft > 0)
 		{
@@ -183,6 +219,7 @@ public class PlatformerPhysics : MonoBehaviour
 				mInJump = true;
 				startedJump = true;
 
+				StopDash();
 				SendAnimMessage("StartedDoubleJump");
 			}
 
@@ -194,6 +231,7 @@ public class PlatformerPhysics : MonoBehaviour
 				mInJump = true;
 				startedJump = true;
 
+				StopDash();
 				if (mOnWall) //A wall jump needs sideways velocity as well
 				{
 					if (mWallIsOnRightSide)
@@ -225,8 +263,13 @@ public class PlatformerPhysics : MonoBehaviour
     //Called when the player presses the crouch button
 	public void Crouch() 
 	{
+		if (!mOnGround)
+			return;
+
 		if (!mCrouching) //make sure we aren't crouching
 		{
+			StopDash();
+			mFastFallHeld = false;
 			mCrouching = true;
 
 			CrouchCollider();
@@ -287,6 +330,9 @@ public class PlatformerPhysics : MonoBehaviour
     //Called when the player presses the sprint button
 	public void StartSprint() 
 	{
+		if (mSprinting)
+			return;
+
 		mSprinting = true;
         SendAnimMessage("StartedSprinting");
 	}
@@ -294,8 +340,48 @@ public class PlatformerPhysics : MonoBehaviour
     //Called when the player releases the sprint button
 	public void StopSprint() 
 	{
+		if (!mSprinting)
+			return;
+
 		mSprinting = false;
         SendAnimMessage("StoppedSprinting");
+	}
+
+	public bool Dash(float direction)
+	{
+		if (!mOnGround || mCrouching || IsDashing() || mDashCooldownLeft > 0.0f || Mathf.Abs(direction) <= 0.01f)
+			return false;
+
+		mDashDirection = Mathf.Sign(direction);
+		mDashing = true;
+
+		Vector3 velocity = GetComponent<Rigidbody>().linearVelocity;
+		velocity.x = mDashDirection * dashSpeed;
+		GetComponent<Rigidbody>().linearVelocity = velocity;
+
+		if (mDashDirection < 0.0f && mGoingRight)
+		{
+			mGoingRight = false;
+			SendAnimMessage("GoLeft");
+		}
+		else if (mDashDirection > 0.0f && !mGoingRight)
+		{
+			mGoingRight = true;
+			SendAnimMessage("GoRight");
+		}
+
+		SendAnimMessage("StartedDash");
+		return true;
+	}
+
+	public void SetFastFallHeld(bool held)
+	{
+		mFastFallHeld = held;
+	}
+
+	public void CancelDash()
+	{
+		StopDash();
 	}
 
 
@@ -306,14 +392,27 @@ public class PlatformerPhysics : MonoBehaviour
 			GetComponent<Rigidbody>().AddForce(Physics.gravity * gravityMultiplier, ForceMode.Acceleration);
 		}
 
-		if (mCrouching) //extra gravity for when we are holding crouch
+		if (mFastFallHeld && !mOnGround && GetComponent<Rigidbody>().linearVelocity.y <= 0.0f)
 		{
-			GetComponent<Rigidbody>().AddForce(Vector3.down * crouchDownwardForce, ForceMode.Acceleration);
+			GetComponent<Rigidbody>().AddForce(Vector3.down * fastFallAcceleration, ForceMode.Acceleration);
+
+			Vector3 velocity = GetComponent<Rigidbody>().linearVelocity;
+			if (velocity.y < -maxFastFallSpeed)
+			{
+				velocity.y = -maxFastFallSpeed;
+				GetComponent<Rigidbody>().linearVelocity = velocity;
+			}
 		}
 	}
 
 	void UpdateCrouching()
 	{
+		if (mCrouching && !mOnGround)
+		{
+			StopCrouch();
+			return;
+		}
+
 		if (mTryingToUncrouch && CanUnCrouch())
 		{
 			StopCrouch();
@@ -332,6 +431,38 @@ public class PlatformerPhysics : MonoBehaviour
 
 		if (mJumpFramesLeft != 0)
 			mJumpFramesLeft--;
+	}
+
+	void UpdateDash()
+	{
+		if (mDashCooldownLeft > 0.0f)
+			mDashCooldownLeft = Mathf.Max(0.0f, mDashCooldownLeft - Time.fixedDeltaTime);
+
+		if (!IsDashing())
+			return;
+
+		float horizontalVelocity = GetComponent<Rigidbody>().linearVelocity.x;
+		bool dashWasBlocked = Mathf.Abs(horizontalVelocity) < dashStopSpeedThreshold;
+		bool dashWasReversed = !dashWasBlocked && Mathf.Sign(horizontalVelocity) != mDashDirection;
+		if (!mOnGround || dashWasBlocked || dashWasReversed)
+		{
+			StopDash();
+			return;
+		}
+
+		Vector3 velocity = GetComponent<Rigidbody>().linearVelocity;
+		velocity.x = mDashDirection * dashSpeed;
+		GetComponent<Rigidbody>().linearVelocity = velocity;
+	}
+
+	void StopDash()
+	{
+		if (!IsDashing())
+			return;
+
+		mDashing = false;
+		mDashCooldownLeft = Mathf.Max(mDashCooldownLeft, dashCooldown);
+		SendAnimMessage("StoppedDash");
 	}
 
 	void ApplyMovementFriction()
@@ -415,7 +546,7 @@ public class PlatformerPhysics : MonoBehaviour
 		if (groundAngle <= maxGroundWalkingAngle)
 		{
 			if(!mOnGround)
-                SendAnimMessage("LandedOnGround");
+				SendAnimMessage("LandedOnGround");
 
 			Debug.DrawLine(hit.point+Vector3.up, hit.point, Color.green);
 			Debug.DrawLine(hit.point, hit.point + mGroundDirection, Color.magenta);
@@ -548,5 +679,7 @@ public class PlatformerPhysics : MonoBehaviour
 	public bool IsOnWall() { return mOnWall; }
 	public bool IsOnGround() { return mOnGround; }
 	public bool IsSprinting() { return mSprinting; }
+	public bool IsDashing() { return mDashing; }
+	public bool HasMovementInput() { return Mathf.Abs(mWalkInput) > 0.01f; }
 }
 

@@ -1,133 +1,331 @@
 fileFormatVersion: 2
 guid: 9ccf2cb20e5afcd44af9586e516ba52f
-timeCreated: 1784084728
-licenseType: Free
 ModelImporter:
-  serializedVersion: 19
-  fileIDToRecycleName:
-    100000: Armature
-    100002: //RootNode
-    100004: Head
-    100006: Head_end
-    100008: Hips
-    100010: LeftArm
-    100012: LeftFoot
-    100014: LeftForeArm
-    100016: LeftHand
-    100018: LeftHand_end
-    100020: LeftLeg
-    100022: LeftShoulder
-    100024: LeftToeBase
-    100026: LeftToeBase_end
-    100028: LeftUpLeg
-    100030: Mesh_0.001
-    100032: Mesh_0.001_MeshPart0
-    100034: Mesh_0.001_MeshPart1
-    100036: Mesh_0.001_MeshPart2
-    100038: Mesh_0.001_MeshPart3
-    100040: Mesh_0.001_MeshPart4
-    100042: Mesh_0.001_MeshPart5
-    100044: Mesh_0.001_MeshPart6
-    100046: Mesh_0.001_MeshPart7
-    100048: Neck
-    100050: RightArm
-    100052: RightFoot
-    100054: RightForeArm
-    100056: RightHand
-    100058: RightHand_end
-    100060: RightLeg
-    100062: RightShoulder
-    100064: RightToeBase
-    100066: RightToeBase_end
-    100068: RightUpLeg
-    100070: root
-    100072: Spine
-    100074: Spine1
-    100076: Spine2
-    400000: Armature
-    400002: //RootNode
-    400004: Head
-    400006: Head_end
-    400008: Hips
-    400010: LeftArm
-    400012: LeftFoot
-    400014: LeftForeArm
-    400016: LeftHand
-    400018: LeftHand_end
-    400020: LeftLeg
-    400022: LeftShoulder
-    400024: LeftToeBase
-    400026: LeftToeBase_end
-    400028: LeftUpLeg
-    400030: Mesh_0.001
-    400032: Mesh_0.001_MeshPart0
-    400034: Mesh_0.001_MeshPart1
-    400036: Mesh_0.001_MeshPart2
-    400038: Mesh_0.001_MeshPart3
-    400040: Mesh_0.001_MeshPart4
-    400042: Mesh_0.001_MeshPart5
-    400044: Mesh_0.001_MeshPart6
-    400046: Mesh_0.001_MeshPart7
-    400048: Neck
-    400050: RightArm
-    400052: RightFoot
-    400054: RightForeArm
-    400056: RightHand
-    400058: RightHand_end
-    400060: RightLeg
-    400062: RightShoulder
-    400064: RightToeBase
-    400066: RightToeBase_end
-    400068: RightUpLeg
-    400070: root
-    400072: Spine
-    400074: Spine1
-    400076: Spine2
-    4300000: Mesh_0.001_MeshPart0
-    4300002: Mesh_0.001_MeshPart1
-    4300004: Mesh_0.001_MeshPart2
-    4300006: Mesh_0.001_MeshPart3
-    4300008: Mesh_0.001_MeshPart4
-    4300010: Mesh_0.001_MeshPart5
-    4300012: Mesh_0.001_MeshPart6
-    4300014: Mesh_0.001_MeshPart7
-    7400000: Armature|a061c179817a15c4791562a3eb0691cf_remap
-    7400002: slide
-    9500000: //RootNode
-    13700000: Mesh_0.001_MeshPart0
-    13700002: Mesh_0.001_MeshPart1
-    13700004: Mesh_0.001_MeshPart2
-    13700006: Mesh_0.001_MeshPart3
-    13700008: Mesh_0.001_MeshPart4
-    13700010: Mesh_0.001_MeshPart5
-    13700012: Mesh_0.001_MeshPart6
-    13700014: Mesh_0.001_MeshPart7
+  serializedVersion: 24300
+  internalIDToNameTable:
+  - first:
+      1: 100000
+    second: Armature
+  - first:
+      1: 100002
+    second: //RootNode
+  - first:
+      1: 100004
+    second: Head
+  - first:
+      1: 100006
+    second: Head_end
+  - first:
+      1: 100008
+    second: Hips
+  - first:
+      1: 100010
+    second: LeftArm
+  - first:
+      1: 100012
+    second: LeftFoot
+  - first:
+      1: 100014
+    second: LeftForeArm
+  - first:
+      1: 100016
+    second: LeftHand
+  - first:
+      1: 100018
+    second: LeftHand_end
+  - first:
+      1: 100020
+    second: LeftLeg
+  - first:
+      1: 100022
+    second: LeftShoulder
+  - first:
+      1: 100024
+    second: LeftToeBase
+  - first:
+      1: 100026
+    second: LeftToeBase_end
+  - first:
+      1: 100028
+    second: LeftUpLeg
+  - first:
+      1: 100030
+    second: Mesh_0.001
+  - first:
+      1: 100032
+    second: Mesh_0.001_MeshPart0
+  - first:
+      1: 100034
+    second: Mesh_0.001_MeshPart1
+  - first:
+      1: 100036
+    second: Mesh_0.001_MeshPart2
+  - first:
+      1: 100038
+    second: Mesh_0.001_MeshPart3
+  - first:
+      1: 100040
+    second: Mesh_0.001_MeshPart4
+  - first:
+      1: 100042
+    second: Mesh_0.001_MeshPart5
+  - first:
+      1: 100044
+    second: Mesh_0.001_MeshPart6
+  - first:
+      1: 100046
+    second: Mesh_0.001_MeshPart7
+  - first:
+      1: 100048
+    second: Neck
+  - first:
+      1: 100050
+    second: RightArm
+  - first:
+      1: 100052
+    second: RightFoot
+  - first:
+      1: 100054
+    second: RightForeArm
+  - first:
+      1: 100056
+    second: RightHand
+  - first:
+      1: 100058
+    second: RightHand_end
+  - first:
+      1: 100060
+    second: RightLeg
+  - first:
+      1: 100062
+    second: RightShoulder
+  - first:
+      1: 100064
+    second: RightToeBase
+  - first:
+      1: 100066
+    second: RightToeBase_end
+  - first:
+      1: 100068
+    second: RightUpLeg
+  - first:
+      1: 100070
+    second: root
+  - first:
+      1: 100072
+    second: Spine
+  - first:
+      1: 100074
+    second: Spine1
+  - first:
+      1: 100076
+    second: Spine2
+  - first:
+      4: 400000
+    second: Armature
+  - first:
+      4: 400002
+    second: //RootNode
+  - first:
+      4: 400004
+    second: Head
+  - first:
+      4: 400006
+    second: Head_end
+  - first:
+      4: 400008
+    second: Hips
+  - first:
+      4: 400010
+    second: LeftArm
+  - first:
+      4: 400012
+    second: LeftFoot
+  - first:
+      4: 400014
+    second: LeftForeArm
+  - first:
+      4: 400016
+    second: LeftHand
+  - first:
+      4: 400018
+    second: LeftHand_end
+  - first:
+      4: 400020
+    second: LeftLeg
+  - first:
+      4: 400022
+    second: LeftShoulder
+  - first:
+      4: 400024
+    second: LeftToeBase
+  - first:
+      4: 400026
+    second: LeftToeBase_end
+  - first:
+      4: 400028
+    second: LeftUpLeg
+  - first:
+      4: 400030
+    second: Mesh_0.001
+  - first:
+      4: 400032
+    second: Mesh_0.001_MeshPart0
+  - first:
+      4: 400034
+    second: Mesh_0.001_MeshPart1
+  - first:
+      4: 400036
+    second: Mesh_0.001_MeshPart2
+  - first:
+      4: 400038
+    second: Mesh_0.001_MeshPart3
+  - first:
+      4: 400040
+    second: Mesh_0.001_MeshPart4
+  - first:
+      4: 400042
+    second: Mesh_0.001_MeshPart5
+  - first:
+      4: 400044
+    second: Mesh_0.001_MeshPart6
+  - first:
+      4: 400046
+    second: Mesh_0.001_MeshPart7
+  - first:
+      4: 400048
+    second: Neck
+  - first:
+      4: 400050
+    second: RightArm
+  - first:
+      4: 400052
+    second: RightFoot
+  - first:
+      4: 400054
+    second: RightForeArm
+  - first:
+      4: 400056
+    second: RightHand
+  - first:
+      4: 400058
+    second: RightHand_end
+  - first:
+      4: 400060
+    second: RightLeg
+  - first:
+      4: 400062
+    second: RightShoulder
+  - first:
+      4: 400064
+    second: RightToeBase
+  - first:
+      4: 400066
+    second: RightToeBase_end
+  - first:
+      4: 400068
+    second: RightUpLeg
+  - first:
+      4: 400070
+    second: root
+  - first:
+      4: 400072
+    second: Spine
+  - first:
+      4: 400074
+    second: Spine1
+  - first:
+      4: 400076
+    second: Spine2
+  - first:
+      43: 4300000
+    second: Mesh_0.001_MeshPart0
+  - first:
+      43: 4300002
+    second: Mesh_0.001_MeshPart1
+  - first:
+      43: 4300004
+    second: Mesh_0.001_MeshPart2
+  - first:
+      43: 4300006
+    second: Mesh_0.001_MeshPart3
+  - first:
+      43: 4300008
+    second: Mesh_0.001_MeshPart4
+  - first:
+      43: 4300010
+    second: Mesh_0.001_MeshPart5
+  - first:
+      43: 4300012
+    second: Mesh_0.001_MeshPart6
+  - first:
+      43: 4300014
+    second: Mesh_0.001_MeshPart7
+  - first:
+      74: 7400000
+    second: Armature|a061c179817a15c4791562a3eb0691cf_remap
+  - first:
+      74: 7400002
+    second: slide
+  - first:
+      95: 9500000
+    second: //RootNode
+  - first:
+      137: 13700000
+    second: Mesh_0.001_MeshPart0
+  - first:
+      137: 13700002
+    second: Mesh_0.001_MeshPart1
+  - first:
+      137: 13700004
+    second: Mesh_0.001_MeshPart2
+  - first:
+      137: 13700006
+    second: Mesh_0.001_MeshPart3
+  - first:
+      137: 13700008
+    second: Mesh_0.001_MeshPart4
+  - first:
+      137: 13700010
+    second: Mesh_0.001_MeshPart5
+  - first:
+      137: 13700012
+    second: Mesh_0.001_MeshPart6
+  - first:
+      137: 13700014
+    second: Mesh_0.001_MeshPart7
+  externalObjects: {}
   materials:
-    importMaterials: 1
+    materialImportMode: 1
     materialName: 0
     materialSearch: 1
+    materialLocation: 0
+    searchTexturesGlobally: 1
   animations:
     legacyGenerateAnimations: 4
     bakeSimulation: 0
     resampleCurves: 1
     optimizeGameObjects: 0
+    removeConstantScaleCurves: 0
     motionNodeName: 
-    rigImportErrors: 
-    rigImportWarnings: 
     animationImportErrors: 
     animationImportWarnings: 
     animationRetargetingWarnings: 
     animationDoRetargetingWarnings: 0
+    importAnimatedCustomProperties: 0
+    importConstraints: 0
     animationCompression: 1
     animationRotationError: 0.5
     animationPositionError: 0.5
     animationScaleError: 0.5
     animationWrapMode: 0
     extraExposedTransformPaths: []
+    extraUserProperties: []
     clipAnimations:
     - serializedVersion: 16
       name: slide
       takeName: Armature|a061c179817a15c4791562a3eb0691cf_remap
+      internalID: 0
       firstFrame: 0
       lastFrame: 106
       wrapMode: 0
@@ -159,26 +357,52 @@ ModelImporter:
     globalScale: 3
     meshCompression: 0
     addColliders: 0
+    useSRGBMaterialColor: 1
+    sortHierarchyByName: 1
+    importPhysicalCameras: 0
+    importVisibility: 0
     importBlendShapes: 1
+    importCameras: 0
+    importLights: 0
+    nodeNameCollisionStrategy: 0
+    fileIdsGeneration: 1
     swapUVChannels: 0
     generateSecondaryUV: 0
     useFileUnits: 1
-    optimizeMeshForGPU: 1
     keepQuads: 0
     weldVertices: 1
+    bakeAxisConversion: 0
+    preserveHierarchy: 0
+    skinWeightsMode: 0
+    maxBonesPerVertex: 4
+    minBoneWeight: 0.001
+    optimizeBones: 1
+    generateMeshLods: 0
+    meshLodGenerationFlags: 0
+    maximumMeshLod: -1
+    meshOptimizationFlags: -1
+    indexFormat: 2
     secondaryUVAngleDistortion: 8
     secondaryUVAreaDistortion: 15.000001
     secondaryUVHardAngle: 88
+    secondaryUVMarginMethod: 0
+    secondaryUVMinLightmapResolution: 40
+    secondaryUVMinObjectScale: 1
     secondaryUVPackMargin: 4
     useFileScale: 1
+    strictVertexDataChecks: 0
   tangentSpace:
     normalSmoothAngle: 60
     normalImportMode: 0
     tangentImportMode: 3
+    normalCalculationMode: 0
+    legacyComputeAllNormalsFromSmoothingGroupsWhenMeshHasBlendShapes: 1
+    blendShapeNormalImportMode: 1
+    normalSmoothingSource: 0
+  referencedClips: []
   importAnimation: 1
-  copyAvatar: 0
   humanDescription:
-    serializedVersion: 2
+    serializedVersion: 3
     human: []
     skeleton: []
     armTwist: 0.5
@@ -188,14 +412,19 @@ ModelImporter:
     armStretch: 0.05
     legStretch: 0.05
     feetSpacing: 0
+    globalScale: 3
     rootMotionBoneName: 
-    rootMotionBoneRotation: {x: 0, y: 0, z: 0, w: 1}
     hasTranslationDoF: 0
     hasExtraRoot: 0
     skeletonHasParents: 1
   lastHumanDescriptionAvatarSource: {instanceID: 0}
+  autoGenerateAvatarMappingIfUnspecified: 1
   animationType: 2
   humanoidOversampling: 1
+  avatarSetup: 1
+  addHumanoidExtraRootOnlyWhenUsingAvatar: 0
+  importBlendShapeDeformPercent: 0
+  remapMaterialsIfMaterialImportModeIsNone: 1
   additionalBone: 0
   userData: 
   assetBundleName: 

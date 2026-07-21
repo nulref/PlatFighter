@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Serialization;
 using System.Collections;
 
 public class PlatformerAnimation : MonoBehaviour
@@ -10,19 +11,31 @@ public class PlatformerAnimation : MonoBehaviour
 
 	public string idleState = "idle";
 	public string walkState = "walk";
-	public string runState = "run";
+	[FormerlySerializedAs("runState")]
+	public string sprintState = "sprint";
+	public string dashState = "dash";
 	public string jumpState = "jump";
 	public string doubleJumpState = "leap";
 	public string slideInState = "slide";
 	public string slideOutState = "slide";
 	public string wallState = "jump";
 	public string tauntState = "taunt";
-	public string deathState = "";
+	public string deathState = "die";
 
 	public float idleSpeedThreshold = 0.1f;
-	public float runSpeedThreshold = 16.0f;
+	[FormerlySerializedAs("runSpeedThreshold")]
+	public float sprintSpeedThreshold = 0.1f;
 	public float crossFadeTime = 0.08f;
 	public float walkPlaybackScale = 0.075f;
+	[Tooltip("Minimum walk playback speed while movement is pressed, preventing a zero-speed animation transition.")]
+	public float minimumWalkPlaybackSpeed = 0.1f;
+	[FormerlySerializedAs("tauntRotationY")]
+	[Tooltip("Visual yaw offset applied while taunting and facing right.")]
+	public float tauntRightRotationY = 90.0f;
+	[Tooltip("Visual yaw offset applied while taunting and facing left.")]
+	public float tauntLeftRotationY = 270.0f;
+	[Tooltip("Degrees per second used to return the model to its normal yaw after taunting.")]
+	public float tauntRotationReturnSpeed = 720.0f;
 	public bool holdSlideWhileCrouching = true;
 	public float slideHoldNormalizedTime = 0.5f;
 	[Tooltip("Visual-only local offset applied to the animated model while sliding.")]
@@ -38,6 +51,7 @@ public class PlatformerAnimation : MonoBehaviour
 	bool mTaunting = false;
 	float mAnimatorSpeedBeforePause = 1.0f;
 	Vector3 mBaseModelLocalPosition = Vector3.zero;
+	Quaternion mBaseModelLocalRotation = Quaternion.identity;
 	string mCurrentAnimatorState = "";
 	string mAirborneAnimatorState = "";
 
@@ -72,6 +86,7 @@ public class PlatformerAnimation : MonoBehaviour
 		}
 
 		mBaseModelLocalPosition = animatedPlayerModel.transform.localPosition;
+		mBaseModelLocalRotation = animatedPlayerModel.transform.localRotation;
 
 		if (preferAnimator && StartAnimatorMode())
 			return;
@@ -180,19 +195,48 @@ public class PlatformerAnimation : MonoBehaviour
 		UpdateLegacyAnimationMode();
 	}
 
+	void LateUpdate()
+	{
+		if (animatedPlayerModel == null)
+			return;
+
+		Quaternion normalRotation = mBaseModelLocalRotation;
+		bool facingLeft = animatedPlayerModel.localScale.z < 0.0f;
+		float tauntRotationY = facingLeft ? tauntLeftRotationY : tauntRightRotationY;
+		Quaternion tauntRotation = normalRotation * Quaternion.Euler(0.0f, tauntRotationY, 0.0f);
+		if (mTaunting)
+		{
+			animatedPlayerModel.localRotation = tauntRotation;
+			return;
+		}
+
+		animatedPlayerModel.localRotation = Quaternion.RotateTowards(
+			animatedPlayerModel.localRotation,
+			normalRotation,
+			tauntRotationReturnSpeed * Time.deltaTime);
+	}
+
 	void UpdateAnimatorMode()
 	{
 		if (animatedPlayerAnimator == null || mRigidbody == null)
 			return;
 
 		float speed = Mathf.Abs(mRigidbody.linearVelocity.x);
+		bool hasMovementInput = mPhysics != null ? mPhysics.HasMovementInput() : speed > idleSpeedThreshold;
 		bool grounded = mPhysics != null && mPhysics.IsOnGround();
 		bool onWall = mPhysics != null && mPhysics.IsOnWall();
-		bool crouching = mPhysics != null && mPhysics.IsCrouching();
+		bool crouching = grounded && mPhysics != null && mPhysics.IsCrouching();
 		bool sprinting = mPhysics != null && mPhysics.IsSprinting();
+		bool dashing = mPhysics != null && mPhysics.IsDashing();
 
 		SetAnimatorFloat(mHasSpeedParameter, SpeedHash, speed);
-		SetAnimatorFloat(mHasNormalizedSpeedParameter, NormalizedSpeedHash, speed * walkPlaybackScale);
+		float normalizedWalkSpeed = speed * walkPlaybackScale;
+		if (hasMovementInput)
+			normalizedWalkSpeed = Mathf.Max(normalizedWalkSpeed, minimumWalkPlaybackSpeed);
+		else
+			normalizedWalkSpeed = 1.0f;
+
+		SetAnimatorFloat(mHasNormalizedSpeedParameter, NormalizedSpeedHash, normalizedWalkSpeed);
 		SetAnimatorBool(mHasGroundedParameter, GroundedHash, grounded);
 		SetAnimatorBool(mHasOnWallParameter, OnWallHash, onWall);
 		SetAnimatorBool(mHasCrouchingParameter, CrouchingHash, crouching);
@@ -206,6 +250,14 @@ public class PlatformerAnimation : MonoBehaviour
 		{
 			ResetModelOffset();
 			PlayAnimatorState(tauntState, crossFadeTime, false);
+			return;
+		}
+
+		if (dashing)
+		{
+			ResumeAnimator();
+			ResetModelOffset();
+			PlayAnimatorState(dashState, crossFadeTime, false);
 			return;
 		}
 
@@ -235,14 +287,14 @@ public class PlatformerAnimation : MonoBehaviour
 
 		mAirborneAnimatorState = "";
 
-		if (speed <= idleSpeedThreshold)
+		if (!hasMovementInput)
 		{
 			PlayAnimatorState(idleState, crossFadeTime, false);
 			return;
 		}
 
-		if (sprinting && !string.IsNullOrEmpty(runState) && speed >= runSpeedThreshold)
-			PlayAnimatorState(runState, crossFadeTime, false);
+		if (sprinting && !string.IsNullOrEmpty(sprintState) && speed >= sprintSpeedThreshold)
+			PlayAnimatorState(sprintState, crossFadeTime, false);
 		else
 			PlayAnimatorState(walkState, crossFadeTime, false);
 	}
@@ -541,6 +593,27 @@ public class PlatformerAnimation : MonoBehaviour
 	void StoppedSprinting()
 	{
 		PlayLocomotionState();
+	}
+
+	void StartedDash()
+	{
+		if (mPlayerDead)
+			return;
+
+		mTaunting = false;
+		ResumeAnimator();
+		ResetModelOffset();
+
+		if (mUseAnimator)
+			PlayAnimatorState(dashState, crossFadeTime, true);
+		else
+			PlayAnimation(dashState);
+	}
+
+	void StoppedDash()
+	{
+		if (!mPlayerDead)
+			PlayLocomotionState();
 	}
 
 	void StartedTaunt()

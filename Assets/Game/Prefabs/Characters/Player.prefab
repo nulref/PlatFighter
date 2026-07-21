@@ -101,6 +101,9 @@ MonoBehaviour:
   accelerationSprinting: 60
   maxSpeedWalking: 15
   maxSpeedSprinting: 20
+  dashSpeed: 28
+  dashCooldown: 0.12
+  dashStopSpeedThreshold: 1
   moveFriction: 0.9
   speedToStopAt: 5
   airFriction: 0.98
@@ -109,7 +112,8 @@ MonoBehaviour:
   crouchedAccelMultiplier: 0.1
   jumpVelocity: 20
   jumpTimeFrames: 5
-  crouchDownwardForce: 20
+  fastFallAcceleration: 20
+  maxFastFallSpeed: 35
   canDoubleJump: 1
   canWallJump: 1
   wallJumpVelocity: 15
@@ -131,10 +135,13 @@ MonoBehaviour:
   enableThumbstickUpJump: 0
   movementDeadZone: 0.25
   jumpBufferTime: 0.12
-  slideStickDeadZone: 0.65
-  slideAngleTolerance: 25
-  slideDownReleaseThreshold: 0.35
+  crouchStickThreshold: 0.65
+  crouchStickReleaseThreshold: 0.35
   dPadDeadZone: 0.5
+  analogSprintThreshold: 0.95
+  dashTapThreshold: 0.75
+  dashTapReleaseThreshold: 0.35
+  dashDoubleTapWindow: 0.28
 --- !u!114 &6724161720494948050
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -153,18 +160,23 @@ MonoBehaviour:
   preferAnimator: 1
   idleState: idle
   walkState: walk
-  runState: run
+  sprintState: sprint
+  dashState: dash
   jumpState: jump
   doubleJumpState: leap
   slideInState: slide
   slideOutState: slide
   wallState: jump
   tauntState: taunt
-  deathState: 
+  deathState: die
   idleSpeedThreshold: 0.1
-  runSpeedThreshold: 16
+  sprintSpeedThreshold: 0.1
   crossFadeTime: 0.08
   walkPlaybackScale: 0.075
+  minimumWalkPlaybackSpeed: 0.1
+  tauntRightRotationY: 90
+  tauntLeftRotationY: 270
+  tauntRotationReturnSpeed: 720
   holdSlideWhileCrouching: 1
   slideHoldNormalizedTime: 0.5
   slideModelOffset: {x: 0, y: -1.26, z: 0}

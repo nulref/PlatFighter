@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.Controls;
+using UnityEngine.Serialization;
 using System.Collections;
 
 public class PlatformerController : MonoBehaviour
@@ -8,25 +9,32 @@ public class PlatformerController : MonoBehaviour
 	public bool enableThumbstickUpJump = false;
 	public float movementDeadZone = 0.25f;
 	public float jumpBufferTime = 0.12f;
-	public float slideStickDeadZone = 0.65f;
-	public float slideAngleTolerance = 25.0f;
-	public float slideDownReleaseThreshold = 0.35f;
+	[FormerlySerializedAs("slideStickDeadZone")]
+	public float crouchStickThreshold = 0.65f;
+	[FormerlySerializedAs("slideDownReleaseThreshold")]
+	public float crouchStickReleaseThreshold = 0.35f;
 	public float dPadDeadZone = 0.5f;
-
-	const float RightSlideAngle = 135.0f;
-	const float LeftSlideAngle = 225.0f;
+	[Tooltip("Horizontal stick amount that activates sprinting.")]
+	public float analogSprintThreshold = 0.95f;
+	[Tooltip("Stick amount that counts as a directional tap for dashing.")]
+	public float dashTapThreshold = 0.75f;
+	public float dashTapReleaseThreshold = 0.35f;
+	public float dashDoubleTapWindow = 0.28f;
 
 	PlatformerPhysics mPlayer;
 	bool mHasControl;
-	bool mControllerSlideActive;
+	bool mControllerDownHeld;
 	bool mTaunting;
 	bool mDPadPressedLastFrame;
 	bool mSprintHeldLastFrame;
-	bool mKeyboardCrouchHeldLastFrame;
 	bool mJumpHeld;
 	bool mJumpHeldLastFrame;
+	bool mDashTapHeld;
+	int mLastDashTapDirection;
+	float mLastDashTapTime = float.NegativeInfinity;
 	float mJumpBufferTimeLeft;
 	Vector2 mMovementInput;
+	Vector2 mRawLeftStickInput;
 
 	void Start () 
 	{
@@ -47,10 +55,19 @@ public class PlatformerController : MonoBehaviour
 
 		HandleTauntInput(movementPressed, mJumpHeld);
 		if (mTaunting)
+		{
+			mPlayer.SetFastFallHeld(false);
 			return;
+		}
+
+		HandleDashInput();
 
 		bool sprintHeld = IsSprintHeld();
 		bool keyboardCrouchHeld = IsKeyboardCrouchHeld();
+		UpdateControllerDownState();
+		bool crouchHeld = keyboardCrouchHeld || mControllerDownHeld;
+		bool grounded = mPlayer.IsOnGround();
+		mPlayer.SetFastFallHeld(crouchHeld && !grounded);
 
 		if (sprintHeld && !mSprintHeldLastFrame)
 			mPlayer.StartSprint();
@@ -58,29 +75,13 @@ public class PlatformerController : MonoBehaviour
 		if (!sprintHeld && mSprintHeldLastFrame)
 			mPlayer.StopSprint();
 
-		if (keyboardCrouchHeld && !mKeyboardCrouchHeldLastFrame)
+		if (grounded && crouchHeld && !mPlayer.IsCrouching())
 			mPlayer.Crouch();
 
-		if (!keyboardCrouchHeld && mKeyboardCrouchHeldLastFrame && !mControllerSlideActive)
+		if (!crouchHeld && mPlayer.IsCrouching())
 			mPlayer.UnCrouch();
 
 		mSprintHeldLastFrame = sprintHeld;
-		mKeyboardCrouchHeldLastFrame = keyboardCrouchHeld;
-
-		bool controllerSlideRequested = IsSlideGesture(mMovementInput);
-		if (controllerSlideRequested)
-		{
-			if (!mPlayer.IsCrouching())
-				mPlayer.Crouch();
-
-			mControllerSlideActive = true;
-		}
-		else if (mControllerSlideActive && !IsStickDownHeld(mMovementInput))
-		{
-			mControllerSlideActive = false;
-			if (!IsKeyboardCrouchHeld())
-				mPlayer.UnCrouch();
-		}
 	}
 
 	void FixedUpdate()
@@ -115,14 +116,26 @@ public class PlatformerController : MonoBehaviour
 	public void RemoveControl()
 	{
 		StopTaunt();
+		if (mPlayer != null && mSprintHeldLastFrame)
+			mPlayer.StopSprint();
+		if (mPlayer != null)
+		{
+			mPlayer.CancelDash();
+			mPlayer.SetFastFallHeld(false);
+		}
+
 		mHasControl = false;
 		mDPadPressedLastFrame = false;
 		mSprintHeldLastFrame = false;
-		mKeyboardCrouchHeldLastFrame = false;
+		mControllerDownHeld = false;
 		mJumpHeld = false;
 		mJumpHeldLastFrame = false;
+		mDashTapHeld = false;
+		mLastDashTapDirection = 0;
+		mLastDashTapTime = float.NegativeInfinity;
 		mJumpBufferTimeLeft = 0.0f;
 		mMovementInput = Vector2.zero;
+		mRawLeftStickInput = Vector2.zero;
 	}
 	public bool HasControl() { return mHasControl; }
 
@@ -140,6 +153,7 @@ public class PlatformerController : MonoBehaviour
 	Vector2 ReadMovementInput()
 	{
 		Vector2 input = Vector2.zero;
+		mRawLeftStickInput = Vector2.zero;
 		Keyboard keyboard = Keyboard.current;
 		if (keyboard != null)
 		{
@@ -156,16 +170,24 @@ public class PlatformerController : MonoBehaviour
 		Gamepad gamepad = Gamepad.current;
 		if (gamepad != null)
 		{
-			Vector2 stickInput = gamepad.leftStick.ReadValue();
-			if (Mathf.Abs(stickInput.x) > movementDeadZone)
-				input.x += stickInput.x;
-			if (Mathf.Abs(stickInput.y) > movementDeadZone)
-				input.y += stickInput.y;
+			mRawLeftStickInput = gamepad.leftStick.ReadValue();
+			input.x += ApplyDeadZone(mRawLeftStickInput.x, movementDeadZone);
+			if (Mathf.Abs(mRawLeftStickInput.y) > movementDeadZone)
+				input.y += mRawLeftStickInput.y;
 		}
 
 		input.x = Mathf.Clamp(input.x, -1.0f, 1.0f);
 		input.y = Mathf.Clamp(input.y, -1.0f, 1.0f);
 		return input;
+	}
+
+	float ApplyDeadZone(float value, float deadZone)
+	{
+		float magnitude = Mathf.Abs(value);
+		if (magnitude <= deadZone)
+			return 0.0f;
+
+		return Mathf.Sign(value) * Mathf.InverseLerp(deadZone, 1.0f, magnitude);
 	}
 
 	bool IsJumpHeld(Vector2 movementInput)
@@ -196,7 +218,7 @@ public class PlatformerController : MonoBehaviour
 
 	bool HasMovementInput(Vector2 movementInput)
 	{
-		return Mathf.Abs(movementInput.x) > movementDeadZone || IsSlideGesture(movementInput) || IsKeyboardCrouchHeld();
+		return Mathf.Abs(movementInput.x) > 0.01f || movementInput.y <= -crouchStickThreshold || IsKeyboardCrouchHeld();
 	}
 
 	bool IsKeyboardCrouchHeld()
@@ -208,30 +230,69 @@ public class PlatformerController : MonoBehaviour
 	bool IsSprintHeld()
 	{
 		Keyboard keyboard = Keyboard.current;
-		return keyboard != null && (IsPressed(keyboard.leftShiftKey) || IsPressed(keyboard.rightShiftKey));
+		bool keyboardSprint = keyboard != null && (IsPressed(keyboard.leftShiftKey) || IsPressed(keyboard.rightShiftKey));
+		bool stickSprint = Mathf.Abs(mRawLeftStickInput.x) >= analogSprintThreshold;
+		return keyboardSprint || stickSprint;
 	}
 
-	bool IsStickDownHeld(Vector2 movementInput)
+	void HandleDashInput()
 	{
-		return movementInput.y <= -slideDownReleaseThreshold;
+		float directionalInput = GetDashDirectionalInput();
+		float inputMagnitude = Mathf.Abs(directionalInput);
+
+		if (mDashTapHeld)
+		{
+			if (inputMagnitude <= dashTapReleaseThreshold)
+				mDashTapHeld = false;
+
+			return;
+		}
+
+		if (inputMagnitude < dashTapThreshold || mMovementInput.y <= -crouchStickThreshold)
+			return;
+
+		mDashTapHeld = true;
+		int direction = directionalInput < 0.0f ? -1 : 1;
+		float tapTime = Time.unscaledTime;
+		bool isDoubleTap = direction == mLastDashTapDirection && tapTime - mLastDashTapTime <= dashDoubleTapWindow;
+
+		if (isDoubleTap && mPlayer.Dash(direction))
+		{
+			mLastDashTapDirection = 0;
+			mLastDashTapTime = float.NegativeInfinity;
+			return;
+		}
+
+		mLastDashTapDirection = direction;
+		mLastDashTapTime = tapTime;
 	}
 
-	bool IsSlideGesture(Vector2 movementInput)
+	float GetDashDirectionalInput()
 	{
-		if (movementInput.sqrMagnitude < slideStickDeadZone * slideStickDeadZone)
-			return false;
+		Keyboard keyboard = Keyboard.current;
+		if (keyboard != null)
+		{
+			bool leftPressed = IsPressed(keyboard.leftArrowKey) || IsPressed(keyboard.aKey);
+			bool rightPressed = IsPressed(keyboard.rightArrowKey) || IsPressed(keyboard.dKey);
+			if (leftPressed != rightPressed)
+				return leftPressed ? -1.0f : 1.0f;
+		}
 
-		// Stick angle is 0 up, 90 right, 180 down, 270 left.
-		float angle = Mathf.Atan2(movementInput.x, movementInput.y) * Mathf.Rad2Deg;
-		if (angle < 0.0f)
-			angle += 360.0f;
-
-		return IsAngleNear(angle, RightSlideAngle) || IsAngleNear(angle, LeftSlideAngle);
+		return mRawLeftStickInput.x;
 	}
 
-	bool IsAngleNear(float angle, float targetAngle)
+	void UpdateControllerDownState()
 	{
-		return Mathf.Abs(Mathf.DeltaAngle(angle, targetAngle)) <= slideAngleTolerance;
+		if (mControllerDownHeld)
+		{
+			if (mRawLeftStickInput.y > -crouchStickReleaseThreshold)
+				mControllerDownHeld = false;
+
+			return;
+		}
+
+		if (mRawLeftStickInput.y <= -crouchStickThreshold)
+			mControllerDownHeld = true;
 	}
 
 	void HandleTauntInput(bool movementPressed, bool jumpHeld)

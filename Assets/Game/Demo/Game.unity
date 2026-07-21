@@ -936,18 +936,23 @@ MonoBehaviour:
   preferAnimator: 1
   idleState: idle
   walkState: walk
-  runState: run
+  sprintState: sprint
+  dashState: dash
   jumpState: jump
   doubleJumpState: leap
   slideInState: slide
   slideOutState: slide
   wallState: jump
   tauntState: taunt
-  deathState: 
+  deathState: die
   idleSpeedThreshold: 0.1
-  runSpeedThreshold: 16
+  sprintSpeedThreshold: 0.1
   crossFadeTime: 0.08
   walkPlaybackScale: 0.075
+  minimumWalkPlaybackSpeed: 0.1
+  tauntRightRotationY: 90
+  tauntLeftRotationY: 270
+  tauntRotationReturnSpeed: 720
   holdSlideWhileCrouching: 1
   slideHoldNormalizedTime: 0.5
   slideModelOffset: {x: 0, y: -1.26, z: 0}
@@ -981,10 +986,13 @@ MonoBehaviour:
   enableThumbstickUpJump: 0
   movementDeadZone: 0.25
   jumpBufferTime: 0.12
-  slideStickDeadZone: 0.65
-  slideAngleTolerance: 25
-  slideDownReleaseThreshold: 0.35
+  crouchStickThreshold: 0.65
+  crouchStickReleaseThreshold: 0.35
   dPadDeadZone: 0.5
+  analogSprintThreshold: 0.95
+  dashTapThreshold: 0.75
+  dashTapReleaseThreshold: 0.35
+  dashDoubleTapWindow: 0.28
 --- !u!114 &117
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1001,6 +1009,9 @@ MonoBehaviour:
   accelerationSprinting: 60
   maxSpeedWalking: 15
   maxSpeedSprinting: 20
+  dashSpeed: 28
+  dashCooldown: 0.12
+  dashStopSpeedThreshold: 1
   moveFriction: 0.9
   speedToStopAt: 5
   airFriction: 0.98
@@ -1009,7 +1020,8 @@ MonoBehaviour:
   crouchedAccelMultiplier: 0.1
   jumpVelocity: 20
   jumpTimeFrames: 5
-  crouchDownwardForce: 20
+  fastFallAcceleration: 20
+  maxFastFallSpeed: 35
   canDoubleJump: 1
   canWallJump: 1
   wallJumpVelocity: 15
@@ -3054,7 +3066,7 @@ TextMesh:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 504316880}
-  m_Text: Shift to sprint!
+  m_Text: Tilt the left stick fully to sprint!
   m_OffsetZ: 0
   m_CharacterSize: 1
   m_LineSpacing: 1
@@ -6358,7 +6370,7 @@ TextMesh:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1364849357}
-  m_Text: There is a little surprise at the top!
+  m_Text: Can you reach the top?
   m_OffsetZ: 0
   m_CharacterSize: 1
   m_LineSpacing: 1
@@ -7434,7 +7446,7 @@ TextMesh:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1555668322}
-  m_Text: Space to jump
+  m_Text: Y to jump
   m_OffsetZ: 0
   m_CharacterSize: 1
   m_LineSpacing: 1
@@ -9295,7 +9307,7 @@ TextMesh:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2016856751}
-  m_Text: Move with the arrow keys
+  m_Text: Move with the left joy stick.
   m_OffsetZ: 0
   m_CharacterSize: 1
   m_LineSpacing: 1

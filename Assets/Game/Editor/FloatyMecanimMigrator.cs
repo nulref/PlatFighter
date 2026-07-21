@@ -29,11 +29,13 @@ public static class FloatyMecanimMigrator
 	{
 		new FloatyClip("idle", FloatyFolder + "/floaty_idle.fbx", true),
 		new FloatyClip("walk", FloatyFolder + "/floaty_walk.fbx", true),
-		new FloatyClip("run", FloatyFolder + "/floaty_run.fbx", true),
+		new FloatyClip("sprint", FloatyFolder + "/floaty_sprint.fbx", true),
+		new FloatyClip("dash", FloatyFolder + "/floaty_dash.fbx", true),
 		new FloatyClip("jump", FloatyFolder + "/floaty_jump.fbx", false),
-		new FloatyClip("leap", FloatyFolder + "/floaty_leap.fbx", false),
+		new FloatyClip("leap", FloatyFolder + "/floaty_leap.fbx", true),
 		new FloatyClip("slide", FloatyFolder + "/floaty_slide.fbx", false),
-		new FloatyClip("taunt", FloatyFolder + "/floaty_taunt.fbx", true)
+		new FloatyClip("taunt", FloatyFolder + "/floaty_taunt.fbx", true),
+		new FloatyClip("die", FloatyFolder + "/floaty_die.fbx", false)
 	};
 
 	[MenuItem("Tools/Platfighter/Setup Floaty Mecanim")]
@@ -67,8 +69,11 @@ public static class FloatyMecanimMigrator
 		GameObject floaty = AssignFloatyToPlayer(controller);
 
 		AssetDatabase.SaveAssets();
-		EditorSceneManager.MarkAllScenesDirty();
-		EditorSceneManager.SaveOpenScenes();
+		if (floaty != null)
+		{
+			EditorSceneManager.MarkAllScenesDirty();
+			EditorSceneManager.SaveOpenScenes();
+		}
 
 		string sceneMessage = floaty == null
 			? "Controller created. Open the demo scene and run this command again to wire the Player."
@@ -94,6 +99,7 @@ public static class FloatyMecanimMigrator
 		importer.animationType = ModelImporterAnimationType.Generic;
 		importer.importAnimation = true;
 		importer.optimizeGameObjects = false;
+		importer.indexFormat = ModelImporterIndexFormat.UInt32;
 		importer.animationWrapMode = clipInfo.Loop ? WrapMode.Loop : WrapMode.Default;
 
 		ModelImporterClipAnimation[] defaultClips = importer.defaultClipAnimations;
@@ -140,6 +146,12 @@ public static class FloatyMecanimMigrator
 
 			AnimatorState state = stateMachine.AddState(Clips[i].StateName, new Vector3(250, 60 + (i * 70), 0));
 			state.motion = clip;
+			if (Clips[i].StateName == "walk")
+			{
+				state.speedParameterActive = true;
+				state.speedParameter = "NormalizedSpeed";
+			}
+
 			if (Clips[i].StateName == "idle")
 				idleState = state;
 		}
@@ -212,6 +224,9 @@ public static class FloatyMecanimMigrator
 			platformerAnimation.animatedPlayerAnimator = animator;
 			platformerAnimation.animatorController = controller;
 			platformerAnimation.preferAnimator = true;
+			platformerAnimation.sprintState = "sprint";
+			platformerAnimation.dashState = "dash";
+			platformerAnimation.deathState = "die";
 			platformerAnimation.slideModelOffset = new Vector3(0.0f, FloatySlideModelOffsetY, 0.0f);
 			EditorUtility.SetDirty(platformerAnimation);
 		}
