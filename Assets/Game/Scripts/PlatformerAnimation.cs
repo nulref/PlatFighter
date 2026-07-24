@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.Serialization;
 using System.Collections;
+using System.Collections.Generic;
 
 public class PlatformerAnimation : MonoBehaviour
 {
@@ -18,7 +19,7 @@ public class PlatformerAnimation : MonoBehaviour
 	public string doubleJumpState = "leap";
 	public string slideInState = "slide";
 	public string slideOutState = "slide";
-	public string wallState = "jump";
+	public string wallState = "wall_grab";
 	public string tauntState = "taunt";
 	public string deathState = "die";
 
@@ -40,6 +41,26 @@ public class PlatformerAnimation : MonoBehaviour
 	public float slideHoldNormalizedTime = 0.5f;
 	[Tooltip("Visual-only local offset applied to the animated model while sliding.")]
 	public Vector3 slideModelOffset = new Vector3(0.0f, -1.26f, 0.0f);
+	[Tooltip("Keeps animated ground-contact bones aligned with the physics ground.")]
+	public bool groundLocomotionFeet = true;
+	[Tooltip("Distance from the Floaty foot/toe bones to the bottom of the boot.")]
+	public float footSoleOffset = 0.11f;
+	[Tooltip("Distance from the lowest slide contact bone to the visible edge of the model.")]
+	public float slideContactOffset = 0.04f;
+	[Tooltip("Maximum visual grounding correction applied in one frame.")]
+	public float maxFootGroundingAdjustment = 0.75f;
+	[Tooltip("Additional visual-only vertical offset while standing idle.")]
+	public float idleGroundingOffset = -0.03f;
+	[Tooltip("Rotates the slide pose to follow the full angle of the supporting ground.")]
+	public bool alignSlideToGroundSlope = true;
+	[Tooltip("Leans the visible model toward the downhill side while moving on a slope.")]
+	public bool leanWithGroundSlope = true;
+	[Tooltip("Maximum visual lean at the steepest walkable ground angle.")]
+	public float maxGroundSlopeLeanAngle = 8.0f;
+	[Tooltip("Approximate time in seconds for slope lean to settle.")]
+	public float groundSlopeLeanSmoothTime = 0.15f;
+	[Tooltip("Visual prop shown only while the character is actively grabbing a wall.")]
+	public GameObject wallGrabProp;
 
 	Animation mLegacyAnimation;
 	Rigidbody mRigidbody;
@@ -52,6 +73,10 @@ public class PlatformerAnimation : MonoBehaviour
 	float mAnimatorSpeedBeforePause = 1.0f;
 	Vector3 mBaseModelLocalPosition = Vector3.zero;
 	Quaternion mBaseModelLocalRotation = Quaternion.identity;
+	Transform[] mFootGroundingPoints = new Transform[0];
+	Transform[] mSlideGroundingPoints = new Transform[0];
+	float mGroundSlopeLeanAngle = 0.0f;
+	float mGroundSlopeLeanVelocity = 0.0f;
 	string mCurrentAnimatorState = "";
 	string mAirborneAnimatorState = "";
 
@@ -87,6 +112,8 @@ public class PlatformerAnimation : MonoBehaviour
 
 		mBaseModelLocalPosition = animatedPlayerModel.transform.localPosition;
 		mBaseModelLocalRotation = animatedPlayerModel.transform.localRotation;
+		CacheFootGroundingPoints();
+		SetWallGrabPropActive(false);
 
 		if (preferAnimator && StartAnimatorMode())
 			return;
@@ -200,20 +227,137 @@ public class PlatformerAnimation : MonoBehaviour
 		if (animatedPlayerModel == null)
 			return;
 
-		Quaternion normalRotation = mBaseModelLocalRotation;
+		float targetSlopeLeanAngle = GetTargetGroundSlopeLeanAngle();
+		mGroundSlopeLeanAngle = Mathf.SmoothDampAngle(
+			mGroundSlopeLeanAngle,
+			targetSlopeLeanAngle,
+			ref mGroundSlopeLeanVelocity,
+			Mathf.Max(0.01f, groundSlopeLeanSmoothTime));
+
+		Quaternion normalRotation =
+			Quaternion.AngleAxis(mGroundSlopeLeanAngle, Vector3.forward) * mBaseModelLocalRotation;
 		bool facingLeft = animatedPlayerModel.localScale.z < 0.0f;
 		float tauntRotationY = facingLeft ? tauntLeftRotationY : tauntRightRotationY;
-		Quaternion tauntRotation = normalRotation * Quaternion.Euler(0.0f, tauntRotationY, 0.0f);
+		Quaternion tauntRotation = mBaseModelLocalRotation * Quaternion.Euler(0.0f, tauntRotationY, 0.0f);
 		if (mTaunting)
 		{
 			animatedPlayerModel.localRotation = tauntRotation;
+		}
+		else
+		{
+			animatedPlayerModel.localRotation = Quaternion.RotateTowards(
+				animatedPlayerModel.localRotation,
+				normalRotation,
+				tauntRotationReturnSpeed * Time.deltaTime);
+		}
+
+		ApplyGroundedFootOffset();
+	}
+
+	float GetTargetGroundSlopeLeanAngle()
+	{
+		if (!mUseAnimator || mPhysics == null || mPlayerDead || mTaunting || !mPhysics.IsOnGround())
+		{
+			return 0.0f;
+		}
+
+		float groundSlopeAngle;
+		if (!mPhysics.TryGetGroundSlopeAngle(out groundSlopeAngle))
+			return 0.0f;
+
+		if (mPhysics.IsCrouching() && IsSlideState())
+			return alignSlideToGroundSlope ? groundSlopeAngle : 0.0f;
+
+		if (!leanWithGroundSlope || !mPhysics.HasMovementInput() || !IsGroundedLocomotionState())
+			return 0.0f;
+
+		float slopeRatio = Mathf.Clamp(
+			groundSlopeAngle / Mathf.Max(0.01f, mPhysics.maxGroundWalkingAngle),
+			-1.0f,
+			1.0f);
+		return slopeRatio * maxGroundSlopeLeanAngle;
+	}
+
+	void CacheFootGroundingPoints()
+	{
+		List<Transform> footGroundingPoints = new List<Transform>();
+		List<Transform> slideGroundingPoints = new List<Transform>();
+		Transform[] modelTransforms = animatedPlayerModel.GetComponentsInChildren<Transform>(true);
+		for (int i = 0; i < modelTransforms.Length; i++)
+		{
+			if (wallGrabProp != null && modelTransforms[i].IsChildOf(wallGrabProp.transform))
+				continue;
+
+			string transformName = modelTransforms[i].name;
+			bool isFootContact = transformName == "LeftFoot" || transformName == "RightFoot" ||
+				transformName == "LeftToeBase" || transformName == "RightToeBase" ||
+				transformName == "LeftToeBase_end" || transformName == "RightToeBase_end";
+			bool isHandContact = transformName == "LeftHand" || transformName == "RightHand" ||
+				transformName == "LeftHand_end" || transformName == "RightHand_end";
+
+			if (isFootContact)
+				footGroundingPoints.Add(modelTransforms[i]);
+			if (isFootContact || isHandContact)
+				slideGroundingPoints.Add(modelTransforms[i]);
+		}
+
+		mFootGroundingPoints = footGroundingPoints.ToArray();
+		mSlideGroundingPoints = slideGroundingPoints.ToArray();
+	}
+
+	void ApplyGroundedFootOffset()
+	{
+		bool sliding = mPhysics != null && mPhysics.IsCrouching() && IsSlideState();
+		bool groundedLocomotion = mPhysics != null && !mPhysics.IsCrouching() && IsGroundedLocomotionState();
+		Transform[] groundingPoints = sliding ? mSlideGroundingPoints : mFootGroundingPoints;
+		if (!groundLocomotionFeet || !mUseAnimator || mPhysics == null ||
+			!mPhysics.IsOnGround() || mPlayerDead || mTaunting ||
+			groundingPoints.Length == 0 || (!sliding && !groundedLocomotion))
+		{
 			return;
 		}
 
-		animatedPlayerModel.localRotation = Quaternion.RotateTowards(
-			animatedPlayerModel.localRotation,
-			normalRotation,
-			tauntRotationReturnSpeed * Time.deltaTime);
+		float locomotionGroundHeight = 0.0f;
+		if (!sliding && !mPhysics.TryGetGroundHeightAt(transform.position, out locomotionGroundHeight))
+			return;
+
+		float groundingAdjustment = float.NegativeInfinity;
+		for (int i = 0; i < groundingPoints.Length; i++)
+		{
+			Transform groundingPoint = groundingPoints[i];
+			float groundHeight = locomotionGroundHeight;
+			if (sliding && !mPhysics.TryGetGroundHeightAt(groundingPoint.position, out groundHeight))
+				continue;
+
+			float contactOffset = sliding ? slideContactOffset : footSoleOffset;
+			float contactHeight = groundingPoint.position.y - contactOffset;
+			groundingAdjustment = Mathf.Max(groundingAdjustment, groundHeight - contactHeight);
+		}
+
+		if (float.IsNegativeInfinity(groundingAdjustment))
+			return;
+
+		groundingAdjustment = Mathf.Clamp(
+			groundingAdjustment,
+			-maxFootGroundingAdjustment,
+			maxFootGroundingAdjustment);
+		if (mCurrentAnimatorState == idleState)
+			groundingAdjustment += idleGroundingOffset;
+
+		animatedPlayerModel.position += Vector3.up * groundingAdjustment;
+	}
+
+	bool IsGroundedLocomotionState()
+	{
+		return mCurrentAnimatorState == idleState ||
+			mCurrentAnimatorState == walkState ||
+			mCurrentAnimatorState == sprintState ||
+			mCurrentAnimatorState == dashState;
+	}
+
+	bool IsSlideState()
+	{
+		return mCurrentAnimatorState == slideInState || mCurrentAnimatorState == slideOutState;
 	}
 
 	void UpdateAnimatorMode()
@@ -228,6 +372,7 @@ public class PlatformerAnimation : MonoBehaviour
 		bool crouching = grounded && mPhysics != null && mPhysics.IsCrouching();
 		bool sprinting = mPhysics != null && mPhysics.IsSprinting();
 		bool dashing = mPhysics != null && mPhysics.IsDashing();
+		SetWallGrabPropActive(onWall && !mPlayerDead && !mTaunting && !crouching && !dashing);
 
 		SetAnimatorFloat(mHasSpeedParameter, SpeedHash, speed);
 		float normalizedWalkSpeed = speed * walkPlaybackScale;
@@ -303,6 +448,9 @@ public class PlatformerAnimation : MonoBehaviour
 	{
 		if (mLegacyAnimation == null || mRigidbody == null)
 			return;
+
+		SetWallGrabPropActive(
+			mPhysics != null && mPhysics.IsOnWall() && !mPlayerDead && !mTaunting);
 
 		if (mTaunting)
 		{
@@ -442,6 +590,7 @@ public class PlatformerAnimation : MonoBehaviour
 	public void PlayerDied()
 	{
 		mTaunting = false;
+		SetWallGrabPropActive(false);
 		ResetModelOffset();
 
 		if (mUseAnimator)
@@ -462,6 +611,7 @@ public class PlatformerAnimation : MonoBehaviour
 		GoRight();
 		ResumeAnimator();
 		mTaunting = false;
+		SetWallGrabPropActive(false);
 		ResetModelOffset();
 		mPlayerDead = false;
 		SetAnimatorBool(mHasDeadParameter, DeadHash, false);
@@ -487,6 +637,7 @@ public class PlatformerAnimation : MonoBehaviour
 	void StartAirborneAnimation(string stateName)
 	{
 		mTaunting = false;
+		SetWallGrabPropActive(false);
 		ResetModelOffset();
 		mAirborneAnimatorState = stateName;
 
@@ -499,6 +650,7 @@ public class PlatformerAnimation : MonoBehaviour
 	void StartedCrouching()
 	{
 		mTaunting = false;
+		SetWallGrabPropActive(false);
 
 		if (mUseAnimator)
 		{
@@ -536,6 +688,7 @@ public class PlatformerAnimation : MonoBehaviour
 	void LandedOnGround()
 	{
 		mAirborneAnimatorState = "";
+		SetWallGrabPropActive(false);
 
 		if (!mTaunting && mPhysics != null && !mPhysics.IsCrouching())
 		{
@@ -550,6 +703,7 @@ public class PlatformerAnimation : MonoBehaviour
 			return;
 
 		mAirborneAnimatorState = "";
+		SetWallGrabPropActive(true);
 
 		if (mPhysics != null && !mPhysics.IsCrouching())
 		{
@@ -573,6 +727,7 @@ public class PlatformerAnimation : MonoBehaviour
 		if (mTaunting)
 			return;
 
+		SetWallGrabPropActive(false);
 		ResetModelOffset();
 
 		if (mUseAnimator)
@@ -601,6 +756,7 @@ public class PlatformerAnimation : MonoBehaviour
 			return;
 
 		mTaunting = false;
+		SetWallGrabPropActive(false);
 		ResumeAnimator();
 		ResetModelOffset();
 
@@ -623,6 +779,7 @@ public class PlatformerAnimation : MonoBehaviour
 
 		ResumeAnimator();
 		mTaunting = true;
+		SetWallGrabPropActive(false);
 
 		if (animatedPlayerModel != null)
 			ResetModelOffset();
@@ -649,5 +806,11 @@ public class PlatformerAnimation : MonoBehaviour
 	void ResetModelOffset()
 	{
 		ApplyModelOffset(Vector3.zero);
+	}
+
+	void SetWallGrabPropActive(bool active)
+	{
+		if (wallGrabProp != null && wallGrabProp.activeSelf != active)
+			wallGrabProp.SetActive(active);
 	}
 }

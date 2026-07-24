@@ -7,9 +7,22 @@ public static class FloatyMecanimMigrator
 {
 	const string FloatyFolder = "Assets/Game/Art/Characters/Floaty";
 	const string FloatyMaterialPath = "Assets/Game/Art/Materials/Floaty.mat";
+	const string WallGrabNestPath = FloatyFolder + "/floaty_wall_grab_nest.fbx";
 	const string ControllerPath = FloatyFolder + "/Floaty.controller";
+	const string PlayerPrefabPath = "Assets/Game/Prefabs/Characters/Player.prefab";
+	const string DemoScenePath = "Assets/Game/Demo/Game.unity";
 	const string PlayerName = "Player";
 	const float FloatySlideModelOffsetY = -1.26f;
+	const float FloatySlideContactOffset = 0.04f;
+	const float FloatyFootSoleOffset = 0.11f;
+	const float FloatyMaxFootGroundingAdjustment = 0.75f;
+	const float FloatyIdleGroundingOffset = -0.03f;
+	const bool FloatyAlignSlideToGroundSlope = true;
+	const float FloatyMaxGroundSlopeLeanAngle = 8.0f;
+	const float FloatyGroundSlopeLeanSmoothTime = 0.15f;
+	const float FloatyGroundContactTolerance = 0.08f;
+	const float FloatyGroundSnapDistance = 0.3f;
+	const float FloatyWallJumpDetachTime = 0.12f;
 
 	struct FloatyClip
 	{
@@ -33,6 +46,7 @@ public static class FloatyMecanimMigrator
 		new FloatyClip("dash", FloatyFolder + "/floaty_dash.fbx", true),
 		new FloatyClip("jump", FloatyFolder + "/floaty_jump.fbx", false),
 		new FloatyClip("leap", FloatyFolder + "/floaty_leap.fbx", true),
+		new FloatyClip("wall_grab", FloatyFolder + "/floaty_wall_grab.fbx", false),
 		new FloatyClip("slide", FloatyFolder + "/floaty_slide.fbx", false),
 		new FloatyClip("taunt", FloatyFolder + "/floaty_taunt.fbx", true),
 		new FloatyClip("die", FloatyFolder + "/floaty_die.fbx", false)
@@ -63,10 +77,14 @@ public static class FloatyMecanimMigrator
 		for (int i = 0; i < Clips.Length; i++)
 			ConfigureImporter(Clips[i]);
 
+		ConfigureWallGrabNestImporter();
 		AssetDatabase.Refresh();
 
 		AnimatorController controller = CreateController();
-		GameObject floaty = AssignFloatyToPlayer(controller);
+		GameObject floaty = showDialog
+			? AssignFloatyToPlayer(controller)
+			: ConfigureDemoScene(controller);
+		bool configuredPlayerPrefab = ConfigurePlayerPrefab(controller);
 
 		AssetDatabase.SaveAssets();
 		if (floaty != null)
@@ -75,9 +93,13 @@ public static class FloatyMecanimMigrator
 			EditorSceneManager.SaveOpenScenes();
 		}
 
-		string sceneMessage = floaty == null
-			? "Controller created. Open the demo scene and run this command again to wire the Player."
-			: "Controller created and assigned to the Player's Floaty model.";
+		string sceneMessage;
+		if (floaty != null && configuredPlayerPrefab)
+			sceneMessage = "Controller, Player prefab, Floaty model, and wall-grab nest configured.";
+		else if (configuredPlayerPrefab)
+			sceneMessage = "Controller and Player prefab configured. Open the demo scene to refresh its Player instance.";
+		else
+			sceneMessage = "Controller created, but the Player prefab could not be configured.";
 
 		Debug.Log(sceneMessage);
 
@@ -112,6 +134,24 @@ public static class FloatyMecanimMigrator
 			importer.clipAnimations = new ModelImporterClipAnimation[] { sourceClip };
 		}
 
+		importer.SaveAndReimport();
+	}
+
+	static void ConfigureWallGrabNestImporter()
+	{
+		ModelImporter importer = AssetImporter.GetAtPath(WallGrabNestPath) as ModelImporter;
+		if (importer == null)
+		{
+			Debug.LogError("Could not find the wall-grab nest FBX importer at " + WallGrabNestPath + ".");
+			return;
+		}
+
+		importer.animationType = ModelImporterAnimationType.None;
+		importer.importAnimation = false;
+		importer.importCameras = false;
+		importer.importLights = false;
+		importer.addCollider = false;
+		importer.indexFormat = ModelImporterIndexFormat.UInt32;
 		importer.SaveAndReimport();
 	}
 
@@ -204,10 +244,68 @@ public static class FloatyMecanimMigrator
 			return null;
 		}
 
+		return ConfigurePlayer(player, controller);
+	}
+
+	static GameObject ConfigureDemoScene(RuntimeAnimatorController controller)
+	{
+		if (AssetDatabase.LoadAssetAtPath<SceneAsset>(DemoScenePath) == null)
+		{
+			Debug.LogError("Could not find the demo scene at " + DemoScenePath + ".");
+			return null;
+		}
+
+		UnityEngine.SceneManagement.Scene demoScene =
+			EditorSceneManager.OpenScene(DemoScenePath, OpenSceneMode.Single);
+		GameObject player = GameObject.Find(PlayerName);
+		if (player == null)
+		{
+			Debug.LogError("Could not find a GameObject named '" + PlayerName + "' in " + DemoScenePath + ".");
+			return null;
+		}
+
+		GameObject floaty = ConfigurePlayer(player, controller);
+		if (floaty != null)
+		{
+			EditorSceneManager.MarkSceneDirty(demoScene);
+			EditorSceneManager.SaveScene(demoScene);
+		}
+
+		return floaty;
+	}
+
+	static bool ConfigurePlayerPrefab(RuntimeAnimatorController controller)
+	{
+		GameObject prefabRoot = PrefabUtility.LoadPrefabContents(PlayerPrefabPath);
+		if (prefabRoot == null)
+		{
+			Debug.LogError("Could not load the Player prefab at " + PlayerPrefabPath + ".");
+			return false;
+		}
+
+		try
+		{
+			GameObject floaty = ConfigurePlayer(prefabRoot, controller);
+			if (floaty == null)
+				return false;
+
+			PrefabUtility.SaveAsPrefabAsset(prefabRoot, PlayerPrefabPath);
+			return true;
+		}
+		finally
+		{
+			PrefabUtility.UnloadPrefabContents(prefabRoot);
+		}
+	}
+
+	static GameObject ConfigurePlayer(GameObject player, RuntimeAnimatorController controller)
+	{
 		Transform existingFloaty = player.transform.Find("Floaty");
 		GameObject floaty = existingFloaty != null ? existingFloaty.gameObject : InstantiateFloatyModel(player.transform);
 		if (floaty == null)
 			return null;
+
+		GameObject wallGrabNest = InstantiateWallGrabNest(floaty.transform);
 
 		Animator animator = floaty.GetComponent<Animator>();
 		if (animator == null)
@@ -218,6 +316,15 @@ public static class FloatyMecanimMigrator
 		animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
 
 		PlatformerAnimation platformerAnimation = player.GetComponent<PlatformerAnimation>();
+		PlatformerPhysics platformerPhysics = player.GetComponent<PlatformerPhysics>();
+		if (platformerPhysics != null)
+		{
+			platformerPhysics.groundContactTolerance = FloatyGroundContactTolerance;
+			platformerPhysics.groundSnapDistance = FloatyGroundSnapDistance;
+			platformerPhysics.wallJumpDetachTime = FloatyWallJumpDetachTime;
+			EditorUtility.SetDirty(platformerPhysics);
+		}
+
 		if (platformerAnimation != null)
 		{
 			platformerAnimation.animatedPlayerModel = floaty.transform;
@@ -227,14 +334,95 @@ public static class FloatyMecanimMigrator
 			platformerAnimation.sprintState = "sprint";
 			platformerAnimation.dashState = "dash";
 			platformerAnimation.deathState = "die";
+			platformerAnimation.wallState = "wall_grab";
 			platformerAnimation.slideModelOffset = new Vector3(0.0f, FloatySlideModelOffsetY, 0.0f);
+			platformerAnimation.slideContactOffset = FloatySlideContactOffset;
+			platformerAnimation.groundLocomotionFeet = true;
+			platformerAnimation.footSoleOffset = FloatyFootSoleOffset;
+			platformerAnimation.maxFootGroundingAdjustment = FloatyMaxFootGroundingAdjustment;
+			platformerAnimation.idleGroundingOffset = FloatyIdleGroundingOffset;
+			platformerAnimation.alignSlideToGroundSlope = FloatyAlignSlideToGroundSlope;
+			platformerAnimation.leanWithGroundSlope = true;
+			platformerAnimation.maxGroundSlopeLeanAngle = FloatyMaxGroundSlopeLeanAngle;
+			platformerAnimation.groundSlopeLeanSmoothTime = FloatyGroundSlopeLeanSmoothTime;
+			platformerAnimation.wallGrabProp = wallGrabNest;
 			EditorUtility.SetDirty(platformerAnimation);
 		}
 
 		DisableOldNinja(player.transform, floaty.transform);
-		ApplyFloatyMaterial(floaty);
+		ApplyFloatyMaterial(floaty, wallGrabNest != null ? wallGrabNest.transform : null);
+		ApplyWallGrabNestMaterials(wallGrabNest);
 		EditorUtility.SetDirty(floaty);
 		return floaty;
+	}
+
+	static GameObject InstantiateWallGrabNest(Transform floatyTransform)
+	{
+		Transform existingNest = floatyTransform.Find("WallGrabNest");
+		if (existingNest != null)
+		{
+			ConfigureWallGrabNestContents(existingNest.gameObject);
+			existingNest.gameObject.SetActive(false);
+			return existingNest.gameObject;
+		}
+
+		GameObject nestPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(WallGrabNestPath);
+		if (nestPrefab == null)
+		{
+			Debug.LogError("Could not load the wall-grab nest model at " + WallGrabNestPath + ".");
+			return null;
+		}
+
+		GameObject nest = PrefabUtility.InstantiatePrefab(nestPrefab, floatyTransform) as GameObject;
+		if (nest == null)
+		{
+			nest = Object.Instantiate(nestPrefab);
+			nest.transform.SetParent(floatyTransform, false);
+		}
+
+		nest.name = "WallGrabNest";
+		nest.transform.localPosition = Vector3.zero;
+		nest.transform.localRotation = Quaternion.identity;
+		nest.transform.localScale = Vector3.one;
+		ConfigureWallGrabNestContents(nest);
+		nest.SetActive(false);
+		return nest;
+	}
+
+	static void ConfigureWallGrabNestContents(GameObject wallGrabNest)
+	{
+		Renderer[] renderers = wallGrabNest.GetComponentsInChildren<Renderer>(true);
+		bool hasNamedNestRenderer = false;
+		Renderer fallbackRenderer = null;
+		for (int i = 0; i < renderers.Length; i++)
+		{
+			if (renderers[i].name.ToLowerInvariant().Contains("nest"))
+				hasNamedNestRenderer = true;
+
+			if (fallbackRenderer == null ||
+				renderers[i].sharedMaterials.Length > fallbackRenderer.sharedMaterials.Length)
+			{
+				fallbackRenderer = renderers[i];
+			}
+		}
+
+		for (int i = 0; i < renderers.Length; i++)
+		{
+			bool isNestRenderer = hasNamedNestRenderer
+				? renderers[i].name.ToLowerInvariant().Contains("nest")
+				: renderers[i] == fallbackRenderer;
+			renderers[i].enabled = isNestRenderer;
+			PrefabUtility.RecordPrefabInstancePropertyModifications(renderers[i]);
+			EditorUtility.SetDirty(renderers[i]);
+		}
+
+		Animator[] animators = wallGrabNest.GetComponentsInChildren<Animator>(true);
+		for (int i = 0; i < animators.Length; i++)
+			animators[i].enabled = false;
+
+		Animation[] legacyAnimations = wallGrabNest.GetComponentsInChildren<Animation>(true);
+		for (int i = 0; i < legacyAnimations.Length; i++)
+			legacyAnimations[i].enabled = false;
 	}
 
 	static GameObject InstantiateFloatyModel(Transform playerTransform)
@@ -258,7 +446,7 @@ public static class FloatyMecanimMigrator
 		return floaty;
 	}
 
-	static void ApplyFloatyMaterial(GameObject floaty)
+	static void ApplyFloatyMaterial(GameObject floaty, Transform excludedRoot)
 	{
 		Material material = AssetDatabase.LoadAssetAtPath<Material>(FloatyMaterialPath);
 		if (material == null)
@@ -270,6 +458,12 @@ public static class FloatyMecanimMigrator
 		Renderer[] renderers = floaty.GetComponentsInChildren<Renderer>(true);
 		for (int i = 0; i < renderers.Length; i++)
 		{
+			if (excludedRoot != null &&
+				(renderers[i].transform == excludedRoot || renderers[i].transform.IsChildOf(excludedRoot)))
+			{
+				continue;
+			}
+
 			Material[] materials = renderers[i].sharedMaterials;
 			for (int materialIndex = 0; materialIndex < materials.Length; materialIndex++)
 				materials[materialIndex] = material;
@@ -277,6 +471,26 @@ public static class FloatyMecanimMigrator
 			renderers[i].sharedMaterials = materials;
 			PrefabUtility.RecordPrefabInstancePropertyModifications(renderers[i]);
 			EditorUtility.SetDirty(renderers[i]);
+		}
+	}
+
+	static void ApplyWallGrabNestMaterials(GameObject wallGrabNest)
+	{
+		if (wallGrabNest == null)
+			return;
+
+		GameObject nestPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(WallGrabNestPath);
+		if (nestPrefab == null)
+			return;
+
+		Renderer[] sourceRenderers = nestPrefab.GetComponentsInChildren<Renderer>(true);
+		Renderer[] instanceRenderers = wallGrabNest.GetComponentsInChildren<Renderer>(true);
+		int rendererCount = Mathf.Min(sourceRenderers.Length, instanceRenderers.Length);
+		for (int i = 0; i < rendererCount; i++)
+		{
+			instanceRenderers[i].sharedMaterials = sourceRenderers[i].sharedMaterials;
+			PrefabUtility.RecordPrefabInstancePropertyModifications(instanceRenderers[i]);
+			EditorUtility.SetDirty(instanceRenderers[i]);
 		}
 	}
 

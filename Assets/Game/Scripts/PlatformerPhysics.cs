@@ -21,6 +21,8 @@ public class PlatformerPhysics : MonoBehaviour
 	public float speedToStopAt			= 5.0f;		//If the character's speed falls below this while being on the ground, the character stops
 	public float airFriction			= 0.98f;	//Air friction is always applied to the character
 	public float maxGroundWalkingAngle	= 30.0f;	//Maximum angle the ground can be for the character to still be able to jump off and not slide down
+	public float groundContactTolerance	= 0.08f;	//Distance below the feet that counts as direct ground contact
+	public float groundSnapDistance		= 0.3f;		//Distance a grounded character can follow down across a slope seam
 	public float crouchColliderScale	= 0.5f;		//Multiplier to the Y-size of the collider when crouching
 	public float crouchedAccelMultiplier= 0.1f;		//Maximum speed factor while crouched
 
@@ -33,7 +35,8 @@ public class PlatformerPhysics : MonoBehaviour
 	public bool canDoubleJump			= true;		//Whether the character can double jump or not
 	public bool canWallJump				= true;		//Whether the character can do a wall jump or not
 	public float wallJumpVelocity		= 15;		//Sideways velocity when doing a walljump
-	public float wallStickyness			= 0.24f;	//Amount of seconds the player has to move away from a wall to let go of it. The idea behind this is that players can press the opposite direction to prepare for a walljump without immediately letting go of the wall
+	public float wallStickyness			= 0.24f;	//Grace time before releasing after the player stops holding toward the wall
+	public float wallJumpDetachTime		= 0.12f;	//Prevents held inward input from immediately reattaching after a wall jump
 	public float turnaroundAccelMultiplier = 2.0f;	//Extra horizontal acceleration when the player reverses direction
 	public float gravityMultiplier		= 3.5f;		//Amount of gravity applied to the character compared to the rest of the physics world
 
@@ -49,6 +52,9 @@ public class PlatformerPhysics : MonoBehaviour
 	float mDashCooldownLeft				= 0.0f;
 	float mDashDirection					= 0.0f;
 	Vector3 mGroundDirection			= Vector3.right; //The direction of the ground we are standing on
+	Vector3 mGroundPoint				= Vector3.zero; //A point on the ground below us
+	Vector3 mGroundNormal				= Vector3.up; //The normal of the ground below us
+	Vector3[] mGroundProbeOrigins		= new Vector3[3];
 
 	bool mInJump						= false;	//Are we in a jump
 	bool mJumpPressed					= false;	//Was the jump button still pressed this frame?
@@ -57,7 +63,9 @@ public class PlatformerPhysics : MonoBehaviour
 
 	bool mOnWall						= false;	//Are we on a wall? (being on the ground while against a wall will keep this false)
 	bool mWallIsOnRightSide				= false;	//Is the wall on the right side of us?
-	float mWallStickynessLeft			= 0;		//Amount of seconds left the player needs to press the opposite direction of the wall to let go of it
+	float mWallStickynessLeft			= 0;		//Grace time left after the player stops pressing toward the wall
+	float mWallJumpDetachTimeLeft		= 0;		//Time left before the wall that was just jumped from can be grabbed again
+	bool mWallJumpWasOnRightSide		= false;	//Side ignored while the post-wall-jump detach timer is active
 
 	float mStoppingForce				= 0;		//This variable holds whether or not a player was moving this frame, if a player doesnt press move, the character will slowly stop
 	float mWalkInput					= 0;		//Current horizontal movement intent after the controller dead zone
@@ -105,12 +113,17 @@ public class PlatformerPhysics : MonoBehaviour
 		mDashDirection = 0.0f;
 		StopCrouch();
 		mGroundDirection = Vector3.right;
+		mGroundPoint = Vector3.zero;
+		mGroundNormal = Vector3.up;
 		mInJump = false;
 		mJumpPressed = false;
 		mSecondJumpLeft = true;
 		mJumpFramesLeft = 0;
 		mOnWall = false;
 		mWallIsOnRightSide = false;
+		mWallStickynessLeft = 0.0f;
+		mWallJumpDetachTimeLeft = 0.0f;
+		mWallJumpWasOnRightSide = false;
 		mStoppingForce = 0;
 		mWalkInput = 0;
 		transform.position = mStartPosition;
@@ -122,9 +135,13 @@ public class PlatformerPhysics : MonoBehaviour
     //Player update
 	void FixedUpdate () 
 	{
+		if (mWallJumpDetachTimeLeft > 0.0f)
+			mWallJumpDetachTimeLeft = Mathf.Max(0.0f, mWallJumpDetachTimeLeft - Time.fixedDeltaTime);
+
 		if(canWallJump)
 			UpdateWallInfo();		//Check the sides to see if we are against a wall
 		UpdateGroundInfo();			//Check below to see if we are on the ground
+		UpdateWallStick();
 
 		UpdateJumping();
 		UpdateCrouching();
@@ -156,24 +173,14 @@ public class PlatformerPhysics : MonoBehaviour
 			}
 		}
 
-		//See if we need to stick to a wall
-		if (mOnWall && mWallStickynessLeft > 0)
-		{
-			//remove time from the stickyness left
-			if ((mWallIsOnRightSide && direction < 0) ||
-				(!mWallIsOnRightSide && direction > 0))
-			{
-				mWallStickynessLeft -= Time.fixedDeltaTime;
-			}
-
-			//see if we just released the wall
-			if (mWallStickynessLeft <= 0)
-			{
-				SendAnimMessage("ReleasedWall");
-			}
-
+		//A held wall grab owns horizontal movement until the player lets go or jumps.
+		if (mOnWall)
 			return;
-		}
+
+		//Do not let continued inward input erase the launch from a wall jump.
+		if (mWallJumpDetachTimeLeft > 0.0f &&
+			IsPressingTowardWall(mWallJumpWasOnRightSide, direction))
+			return;
 
 		//get an acceleration amount
 		float accel = accelerationWalking;
@@ -211,7 +218,7 @@ public class PlatformerPhysics : MonoBehaviour
 		//See if we can start a jump
 		if (mJumpFramesLeft == 0 && !mInJump && !mCrouching)
 		{
-			if (!mOnGround && mSecondJumpLeft && canDoubleJump) //Second jump
+			if (!mOnGround && !mOnWall && mSecondJumpLeft && canDoubleJump) //Second jump
 			{
 				mSecondJumpLeft = false;
 
@@ -234,7 +241,10 @@ public class PlatformerPhysics : MonoBehaviour
 				StopDash();
 				if (mOnWall) //A wall jump needs sideways velocity as well
 				{
-					if (mWallIsOnRightSide)
+					bool wallWasOnRightSide = mWallIsOnRightSide;
+					BeginWallJumpDetach();
+
+					if (wallWasOnRightSide)
 						GetComponent<Rigidbody>().linearVelocity += wallJumpVelocity * Vector3.left;
 					else
 						GetComponent<Rigidbody>().linearVelocity += wallJumpVelocity * Vector3.right;
@@ -243,6 +253,9 @@ public class PlatformerPhysics : MonoBehaviour
 				}
 				else
 				{
+					mOnGround = false;
+					mGroundDirection = Vector3.right;
+					mGroundNormal = Vector3.up;
                     SendAnimMessage("StartedJump");
 				}
 			}
@@ -263,7 +276,7 @@ public class PlatformerPhysics : MonoBehaviour
     //Called when the player presses the crouch button
 	public void Crouch() 
 	{
-		if (!mOnGround)
+		if (!mOnGround || IsMovingUphill())
 			return;
 
 		if (!mCrouching) //make sure we aren't crouching
@@ -387,6 +400,9 @@ public class PlatformerPhysics : MonoBehaviour
 
 	void ApplyGravity()
 	{
+		if (mOnWall)
+			return;
+
 		if (!mOnGround) //basic gravity, only applied when we are not on the ground
 		{
 			GetComponent<Rigidbody>().AddForce(Physics.gravity * gravityMultiplier, ForceMode.Acceleration);
@@ -407,7 +423,7 @@ public class PlatformerPhysics : MonoBehaviour
 
 	void UpdateCrouching()
 	{
-		if (mCrouching && !mOnGround)
+		if (mCrouching && (!mOnGround || IsMovingUphill()))
 		{
 			StopCrouch();
 			return;
@@ -467,6 +483,13 @@ public class PlatformerPhysics : MonoBehaviour
 
 	void ApplyMovementFriction()
 	{
+		if (mOnWall)
+		{
+			GetComponent<Rigidbody>().linearVelocity = Vector3.zero;
+			mStoppingForce = 1.0f;
+			return;
+		}
+
 		Vector3 velocity = GetComponent<Rigidbody>().linearVelocity;
 
 		//Apply ground friction
@@ -494,6 +517,11 @@ public class PlatformerPhysics : MonoBehaviour
 		if (absSpeed < speedToStopAt && mStoppingForce == 1.0f)
 			velocity.x = 0;
 
+		//Keep grounded velocity tangent to the surface. Without this, uphill vertical
+		//velocity carries the character into the air when a slope meets flat ground.
+		if (mOnGround && !mInJump)
+			velocity = Vector3.Dot(velocity, mGroundDirection) * mGroundDirection;
+
 		//Apply final velicty to rigid body
 		GetComponent<Rigidbody>().linearVelocity = velocity;
 
@@ -512,35 +540,80 @@ public class PlatformerPhysics : MonoBehaviour
 
 	void UpdateGroundInfo()
 	{
-		//We will trace 2 rays from the front and back of the character both downwards, to see if there is any ground under the character's feet
+		//Never let the adhesion probe reattach an intentional jump before the
+		//rigidbody has moved clear of the ground.
+		if (mInJump && GetComponent<Rigidbody>().linearVelocity.y > 0.0f)
+		{
+			ClearGroundInfo();
+			return;
+		}
 
-		float epsilon = 0.05f; //the amount the ray will trace below the feet of the character to check if there is ground
+		//Probe the front, center, and back of the character. Choosing the closest
+		//walkable hit keeps the supporting surface stable where slopes meet flats.
+		bool wasOnGround = mOnGround;
+		float probeDistance = wasOnGround && !mInJump ? groundSnapDistance : groundContactTolerance;
 		float extraHeight = mCharacterHeight * 0.75f;
 		float halfPlayerWidth = mCharacterWidth * 0.49f;
 
-		//Origins of the ray
-		Vector3 origin1 = GetBottomCenter() + Vector3.right * halfPlayerWidth + Vector3.up * extraHeight;
-		Vector3 origin2 = GetBottomCenter() + Vector3.left * halfPlayerWidth + Vector3.up * extraHeight;
-		Vector3 direction = Vector3.down;
-		RaycastHit hit;
+		Vector3 bottomCenter = GetBottomCenter();
+		mGroundProbeOrigins[0] = bottomCenter + Vector3.right * halfPlayerWidth + Vector3.up * extraHeight;
+		mGroundProbeOrigins[1] = bottomCenter + Vector3.up * extraHeight;
+		mGroundProbeOrigins[2] = bottomCenter + Vector3.left * halfPlayerWidth + Vector3.up * extraHeight;
 
-		//Actual physic traces
-		if (Physics.Raycast(origin1, direction, out hit) && (hit.distance < extraHeight + epsilon))
-			HitGround(origin1, hit);
-		else if (Physics.Raycast(origin2, direction, out hit) && (hit.distance < extraHeight + epsilon))
-			HitGround(origin2, hit);
-		else
+		bool foundGround = false;
+		RaycastHit closestHit = new RaycastHit();
+		Vector3 closestOrigin = Vector3.zero;
+		for (int i = 0; i < mGroundProbeOrigins.Length; i++)
 		{
-			mOnGround = false; //We didnt hit anything, so we are in the air
-			mGroundDirection = Vector3.right;
+			RaycastHit candidateHit;
+			if (!Physics.Raycast(
+				mGroundProbeOrigins[i],
+				Vector3.down,
+				out candidateHit,
+				extraHeight + probeDistance,
+				Physics.DefaultRaycastLayers,
+				QueryTriggerInteraction.Ignore))
+			{
+				continue;
+			}
+
+			float candidateAngle = Vector3.Angle(candidateHit.normal, Vector3.up);
+			if (candidateAngle > maxGroundWalkingAngle)
+				continue;
+
+			if (!foundGround || candidateHit.distance < closestHit.distance)
+			{
+				foundGround = true;
+				closestHit = candidateHit;
+				closestOrigin = mGroundProbeOrigins[i];
+			}
 		}
+
+		if (!foundGround)
+		{
+			ClearGroundInfo();
+			return;
+		}
+
+		float gapBelowFeet = closestHit.distance - extraHeight;
+		if (wasOnGround && !mInJump && gapBelowFeet > 0.0f)
+			GetComponent<Rigidbody>().position += Vector3.down * gapBelowFeet;
+
+		HitGround(closestOrigin, closestHit);
+	}
+
+	void ClearGroundInfo()
+	{
+		mOnGround = false;
+		mGroundDirection = Vector3.right;
+		mGroundNormal = Vector3.up;
 	}
 
 	void HitGround(Vector3 origin, RaycastHit hit)
 	{
 		//Calculate the angle of the ground we are standing on based on the normal
 		mGroundDirection = new Vector3(hit.normal.y, -hit.normal.x, 0);
-		float groundAngle = Vector3.Angle(mGroundDirection, new Vector3(mGroundDirection.x, 0, 0));
+		float groundAngle = Vector3.Angle(hit.normal, Vector3.up);
 
 		//Check if we can walk on this angle of ground
 		if (groundAngle <= maxGroundWalkingAngle)
@@ -550,6 +623,8 @@ public class PlatformerPhysics : MonoBehaviour
 
 			Debug.DrawLine(hit.point+Vector3.up, hit.point, Color.green);
 			Debug.DrawLine(hit.point, hit.point + mGroundDirection, Color.magenta);
+			mGroundPoint = hit.point;
+			mGroundNormal = hit.normal;
 			mOnGround = true;
 			mOnWall = false;
 		}
@@ -564,6 +639,12 @@ public class PlatformerPhysics : MonoBehaviour
 
 	void UpdateWallInfo()
 	{
+		if (mWallJumpDetachTimeLeft > 0.0f)
+		{
+			ReleaseWall(false);
+			return;
+		}
+
 		//We will trace 2 rays from the center of the character to the left and right, to see if we are on any wall
 
 		float epsilon = 0.05f;
@@ -600,30 +681,70 @@ public class PlatformerPhysics : MonoBehaviour
 			}
 		}
 
-		//We hit no wall, but we used to be on the wall, this means we just released
-		if (mOnWall)
-		{
-            SendAnimMessage("ReleasedWall");
-		}
-
-		mWallStickynessLeft = 0;
-		mOnWall = false;
+		//We hit no wall, but we used to be on the wall, this means we just released.
+		ReleaseWall(true);
 	}
 
 	void HitWall(bool onRightSide)
 	{
+		//Touching a wall is not enough to grab it. The player must press into it.
+		if (!mOnWall && !IsPressingTowardWall(onRightSide, mWalkInput))
+			return;
+
 		mWallIsOnRightSide = onRightSide;
 		mGoingRight = mWallIsOnRightSide;
 
 		if (!mOnWall)
 		{
-			GetComponent<Rigidbody>().linearVelocity = new Vector3(0, GetComponent<Rigidbody>().linearVelocity.y, 0); //Remove horizontal speed
+			GetComponent<Rigidbody>().linearVelocity = Vector3.zero;
 			mWallStickynessLeft = wallStickyness;
 			mOnWall = true;
             SendAnimMessage("LandedOnWall");
 		}
 
 		mOnWall = true;
+	}
+
+	void UpdateWallStick()
+	{
+		if (!mOnWall)
+			return;
+
+		if (IsPressingTowardWall(mWallIsOnRightSide, mWalkInput))
+		{
+			//Refreshing the grace timer makes the grab permanent for as long as
+			//the player continues to hold the stick toward the wall.
+			mWallStickynessLeft = wallStickyness;
+			return;
+		}
+
+		mWallStickynessLeft = Mathf.Max(0.0f, mWallStickynessLeft - Time.fixedDeltaTime);
+		if (mWallStickynessLeft <= 0.0f)
+			ReleaseWall(true);
+	}
+
+	bool IsPressingTowardWall(bool wallIsOnRightSide, float direction)
+	{
+		const float inputThreshold = 0.01f;
+		return wallIsOnRightSide ? direction > inputThreshold : direction < -inputThreshold;
+	}
+
+	void BeginWallJumpDetach()
+	{
+		mWallJumpWasOnRightSide = mWallIsOnRightSide;
+		mWallJumpDetachTimeLeft = wallJumpDetachTime;
+		ReleaseWall(false);
+	}
+
+	void ReleaseWall(bool notifyAnimation)
+	{
+		if (!mOnWall)
+			return;
+
+		mOnWall = false;
+		mWallStickynessLeft = 0.0f;
+		if (notifyAnimation)
+			SendAnimMessage("ReleasedWall");
 	}
 
 	bool CanUnCrouch()
@@ -681,5 +802,40 @@ public class PlatformerPhysics : MonoBehaviour
 	public bool IsSprinting() { return mSprinting; }
 	public bool IsDashing() { return mDashing; }
 	public bool HasMovementInput() { return Mathf.Abs(mWalkInput) > 0.01f; }
+	public bool IsMovingUphill()
+	{
+		float groundSlopeAngle;
+		if (!TryGetGroundSlopeAngle(out groundSlopeAngle) || Mathf.Abs(groundSlopeAngle) <= 0.01f)
+			return false;
+
+		float horizontalMotion = GetComponent<Rigidbody>().linearVelocity.x;
+		if (Mathf.Abs(horizontalMotion) <= 0.01f)
+			horizontalMotion = mWalkInput;
+
+		return Mathf.Abs(horizontalMotion) > 0.01f &&
+			Mathf.Sign(horizontalMotion) == Mathf.Sign(groundSlopeAngle);
+	}
+
+	public bool TryGetGroundSlopeAngle(out float slopeAngle)
+	{
+		slopeAngle = 0.0f;
+		if (!mOnGround)
+			return false;
+
+		slopeAngle = Mathf.Atan2(mGroundDirection.y, mGroundDirection.x) * Mathf.Rad2Deg;
+		return true;
+	}
+
+	public bool TryGetGroundHeightAt(Vector3 worldPosition, out float groundHeight)
+	{
+		groundHeight = 0.0f;
+		if (!mOnGround || Mathf.Abs(mGroundNormal.y) <= 0.001f)
+			return false;
+
+		Vector3 pointOffset = worldPosition - mGroundPoint;
+		groundHeight = mGroundPoint.y -
+			((mGroundNormal.x * pointOffset.x) + (mGroundNormal.z * pointOffset.z)) / mGroundNormal.y;
+		return true;
+	}
 }
 
