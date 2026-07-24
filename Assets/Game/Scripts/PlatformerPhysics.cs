@@ -69,6 +69,7 @@ public class PlatformerPhysics : MonoBehaviour
 
 	float mStoppingForce				= 0;		//This variable holds whether or not a player was moving this frame, if a player doesnt press move, the character will slowly stop
 	float mWalkInput					= 0;		//Current horizontal movement intent after the controller dead zone
+	float mSlideEntrySpeed			= 0;		//Horizontal speed carried into the current grounded slide
 	bool mGoingRight					= true;		//Are we going to the right?
 	
 	float mCharacterHeight;							//Character bounding box height
@@ -97,10 +98,11 @@ public class PlatformerPhysics : MonoBehaviour
 		if (GetComponent<Rigidbody>().useGravity)
 			Debug.LogWarning("You should turn off 'use gravity' on the platformer rigidbody. This will give strange behaviour.");
 
-		mStartPosition = transform.position;
 		RecalcBounds();
 		origColliderCenterY = ((BoxCollider)GetComponent<Collider>()).center.y;
 		origColliderSizeY = ((BoxCollider)GetComponent<Collider>()).size.y;
+		InitializeGrounding();
+		mStartPosition = transform.position;
 	}
 
 	public void Reset() //resets all private variables to their starting values
@@ -126,8 +128,11 @@ public class PlatformerPhysics : MonoBehaviour
 		mWallJumpWasOnRightSide = false;
 		mStoppingForce = 0;
 		mWalkInput = 0;
+		mSlideEntrySpeed = 0.0f;
 		transform.position = mStartPosition;
 		GetComponent<Rigidbody>().linearVelocity = Vector3.zero;
+		RecalcBounds();
+		InitializeGrounding();
 		mGoingRight = true;
 	}
 
@@ -281,6 +286,9 @@ public class PlatformerPhysics : MonoBehaviour
 
 		if (!mCrouching) //make sure we aren't crouching
 		{
+			//Capture momentum before StopDash changes the movement state. Grounded
+			//slides retain this speed even if the crouch input has no horizontal axis.
+			mSlideEntrySpeed = Mathf.Abs(GetComponent<Rigidbody>().linearVelocity.x);
 			StopDash();
 			mFastFallHeld = false;
 			mCrouching = true;
@@ -320,6 +328,7 @@ public class PlatformerPhysics : MonoBehaviour
 	{
 		mTryingToUncrouch = false;
 		mCrouching = false;
+		mSlideEntrySpeed = 0.0f;
 		UnCrouchCollider();
 		RecalcBounds();
 		SendAnimMessage("StoppedCrouching");
@@ -439,14 +448,28 @@ public class PlatformerPhysics : MonoBehaviour
 	void UpdateJumping()
 	{
 		if (!mJumpPressed && mInJump) //see if we released the jump button
-		{
-			mJumpFramesLeft = 0;
-			mInJump = false;
-		}
+			EndJumpAscent();
+
 		mJumpPressed = false;
 
 		if (mJumpFramesLeft != 0)
 			mJumpFramesLeft--;
+	}
+
+	void EndJumpAscent()
+	{
+		mJumpFramesLeft = 0;
+		mInJump = false;
+
+		//Releasing before the apex removes the remaining upward momentum.
+		//ApplyGravity runs immediately after this and begins the descent.
+		Rigidbody body = GetComponent<Rigidbody>();
+		Vector3 velocity = body.linearVelocity;
+		if (velocity.y > 0.0f)
+		{
+			velocity.y = 0.0f;
+			body.linearVelocity = velocity;
+		}
 	}
 
 	void UpdateDash()
@@ -491,9 +514,10 @@ public class PlatformerPhysics : MonoBehaviour
 		}
 
 		Vector3 velocity = GetComponent<Rigidbody>().linearVelocity;
+		bool preserveSlideMomentum = mOnGround && mCrouching;
 
 		//Apply ground friction
-		if (mOnGround && mStoppingForce > 0.0f)
+		if (mOnGround && mStoppingForce > 0.0f && !preserveSlideMomentum)
 		{
 			Vector3 velocityInGroundDir = Vector3.Dot(velocity, mGroundDirection) * mGroundDirection; //project velocity on ground direction
 			Vector3 newVelocityInGroundDir = velocityInGroundDir * Mathf.Lerp(1.0f, moveFriction, mStoppingForce); //apply ground friction on velocity
@@ -501,7 +525,8 @@ public class PlatformerPhysics : MonoBehaviour
 		}
 
 		//Apply air friction
-		velocity *= airFriction;
+		if (!preserveSlideMomentum)
+			velocity *= airFriction;
 
 		float absSpeed = Mathf.Abs(velocity.x);
 
@@ -509,12 +534,14 @@ public class PlatformerPhysics : MonoBehaviour
 		float maxSpeed = maxSpeedWalking;
 		if (mSprinting)
 			maxSpeed = maxSpeedSprinting;
+		if (preserveSlideMomentum)
+			maxSpeed = Mathf.Max(maxSpeed, mSlideEntrySpeed);
 
 		if (absSpeed > maxSpeed)
 			velocity.x *= maxSpeed / absSpeed;
 
 		//Apply minimum speed
-		if (absSpeed < speedToStopAt && mStoppingForce == 1.0f)
+		if (!preserveSlideMomentum && absSpeed < speedToStopAt && mStoppingForce == 1.0f)
 			velocity.x = 0;
 
 		//Keep grounded velocity tangent to the surface. Without this, uphill vertical
@@ -538,7 +565,17 @@ public class PlatformerPhysics : MonoBehaviour
 	}
 
 
-	void UpdateGroundInfo()
+	void InitializeGrounding()
+	{
+		//Start and respawn before the first animation update with an accurate
+		//grounded state. Only nearby walkable ground is considered, so a spawn
+		//that is intentionally airborne remains airborne.
+		Physics.SyncTransforms();
+		UpdateGroundInfo(true, false);
+		Physics.SyncTransforms();
+	}
+
+	void UpdateGroundInfo(bool snapOnFirstContact = false, bool notifyLanding = true)
 	{
 		//Never let the adhesion probe reattach an intentional jump before the
 		//rigidbody has moved clear of the ground.
@@ -551,7 +588,8 @@ public class PlatformerPhysics : MonoBehaviour
 		//Probe the front, center, and back of the character. Choosing the closest
 		//walkable hit keeps the supporting surface stable where slopes meet flats.
 		bool wasOnGround = mOnGround;
-		float probeDistance = wasOnGround && !mInJump ? groundSnapDistance : groundContactTolerance;
+		bool canSnapToGround = snapOnFirstContact || (wasOnGround && !mInJump);
+		float probeDistance = canSnapToGround ? groundSnapDistance : groundContactTolerance;
 		float extraHeight = mCharacterHeight * 0.75f;
 		float halfPlayerWidth = mCharacterWidth * 0.49f;
 
@@ -596,10 +634,10 @@ public class PlatformerPhysics : MonoBehaviour
 		}
 
 		float gapBelowFeet = closestHit.distance - extraHeight;
-		if (wasOnGround && !mInJump && gapBelowFeet > 0.0f)
+		if (canSnapToGround && gapBelowFeet > 0.0f)
 			GetComponent<Rigidbody>().position += Vector3.down * gapBelowFeet;
 
-		HitGround(closestOrigin, closestHit);
+		HitGround(closestOrigin, closestHit, notifyLanding);
 	}
 
 	void ClearGroundInfo()
@@ -609,7 +647,7 @@ public class PlatformerPhysics : MonoBehaviour
 		mGroundNormal = Vector3.up;
 	}
 
-	void HitGround(Vector3 origin, RaycastHit hit)
+	void HitGround(Vector3 origin, RaycastHit hit, bool notifyLanding)
 	{
 		//Calculate the angle of the ground we are standing on based on the normal
 		mGroundDirection = new Vector3(hit.normal.y, -hit.normal.x, 0);
@@ -618,7 +656,7 @@ public class PlatformerPhysics : MonoBehaviour
 		//Check if we can walk on this angle of ground
 		if (groundAngle <= maxGroundWalkingAngle)
 		{
-			if(!mOnGround)
+			if(!mOnGround && notifyLanding)
 				SendAnimMessage("LandedOnGround");
 
 			Debug.DrawLine(hit.point+Vector3.up, hit.point, Color.green);

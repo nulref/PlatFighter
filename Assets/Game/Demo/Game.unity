@@ -948,6 +948,8 @@ MonoBehaviour:
   idleSpeedThreshold: 0.1
   sprintSpeedThreshold: 0.1
   crossFadeTime: 0.08
+  airborneCrossFadeTime: 0.02
+  jumpAnimationStartTime: 0.25
   walkPlaybackScale: 0.075
   minimumWalkPlaybackSpeed: 0.1
   tauntRightRotationY: 90

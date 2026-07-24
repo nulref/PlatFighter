@@ -23,6 +23,8 @@ public static class FloatyMecanimMigrator
 	const float FloatyGroundContactTolerance = 0.08f;
 	const float FloatyGroundSnapDistance = 0.3f;
 	const float FloatyWallJumpDetachTime = 0.12f;
+	const float FloatyAirborneCrossFadeTime = 0.02f;
+	const float FloatyJumpAnimationStartTime = 15.0f / 60.0f;
 
 	struct FloatyClip
 	{
@@ -335,6 +337,8 @@ public static class FloatyMecanimMigrator
 			platformerAnimation.dashState = "dash";
 			platformerAnimation.deathState = "die";
 			platformerAnimation.wallState = "wall_grab";
+			platformerAnimation.airborneCrossFadeTime = FloatyAirborneCrossFadeTime;
+			platformerAnimation.jumpAnimationStartTime = FloatyJumpAnimationStartTime;
 			platformerAnimation.slideModelOffset = new Vector3(0.0f, FloatySlideModelOffsetY, 0.0f);
 			platformerAnimation.slideContactOffset = FloatySlideContactOffset;
 			platformerAnimation.groundLocomotionFeet = true;

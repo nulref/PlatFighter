@@ -27,6 +27,10 @@ public class PlatformerAnimation : MonoBehaviour
 	[FormerlySerializedAs("runSpeedThreshold")]
 	public float sprintSpeedThreshold = 0.1f;
 	public float crossFadeTime = 0.08f;
+	[Tooltip("Fixed-duration blend, in seconds, used when entering jump, double-jump, and wall-jump animations.")]
+	public float airborneCrossFadeTime = 0.02f;
+	[Tooltip("Time, in seconds, skipped at the start of the regular and wall-jump animation.")]
+	public float jumpAnimationStartTime = 0.25f;
 	public float walkPlaybackScale = 0.075f;
 	[Tooltip("Minimum walk playback speed while movement is pressed, preventing a zero-speed animation transition.")]
 	public float minimumWalkPlaybackSpeed = 0.1f;
@@ -500,7 +504,12 @@ public class PlatformerAnimation : MonoBehaviour
 		PlayLegacyAnimation(animName);
 	}
 
-	void PlayAnimatorState(string stateName, float fadeTime, bool forceRestart)
+	void PlayAnimatorState(
+		string stateName,
+		float fadeTime,
+		bool forceRestart,
+		bool useFixedTransitionTime = false,
+		float fixedTimeOffset = 0.0f)
 	{
 		if (animatedPlayerAnimator == null || string.IsNullOrEmpty(stateName))
 			return;
@@ -512,7 +521,14 @@ public class PlatformerAnimation : MonoBehaviour
 		mCurrentAnimatorState = stateName;
 
 		if (fadeTime <= 0.0f)
-			animatedPlayerAnimator.Play(stateName, 0, 0.0f);
+		{
+			if (useFixedTransitionTime)
+				animatedPlayerAnimator.PlayInFixedTime(stateName, 0, fixedTimeOffset);
+			else
+				animatedPlayerAnimator.Play(stateName, 0, 0.0f);
+		}
+		else if (useFixedTransitionTime)
+			animatedPlayerAnimator.CrossFadeInFixedTime(stateName, fadeTime, 0, fixedTimeOffset);
 		else
 			animatedPlayerAnimator.CrossFade(stateName, fadeTime, 0);
 	}
@@ -621,7 +637,7 @@ public class PlatformerAnimation : MonoBehaviour
 	//MESSAGES CALLED BY PlatformerPhysics.cs:
 	void StartedJump()
 	{
-		StartAirborneAnimation(jumpState);
+		StartAirborneAnimation(jumpState, jumpAnimationStartTime);
 	}
 
 	void StartedDoubleJump()
@@ -631,10 +647,10 @@ public class PlatformerAnimation : MonoBehaviour
 
 	void StartedWallJump()
 	{
-		StartAirborneAnimation(jumpState);
+		StartAirborneAnimation(jumpState, jumpAnimationStartTime);
 	}
 
-	void StartAirborneAnimation(string stateName)
+	void StartAirborneAnimation(string stateName, float fixedTimeOffset = 0.0f)
 	{
 		mTaunting = false;
 		SetWallGrabPropActive(false);
@@ -642,7 +658,7 @@ public class PlatformerAnimation : MonoBehaviour
 		mAirborneAnimatorState = stateName;
 
 		if (mUseAnimator)
-			PlayAnimatorState(stateName, crossFadeTime, true);
+			PlayAnimatorState(stateName, airborneCrossFadeTime, true, true, fixedTimeOffset);
 		else
 			PlayLegacyAnimation("jump");
 	}
