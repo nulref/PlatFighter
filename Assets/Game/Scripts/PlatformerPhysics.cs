@@ -48,6 +48,8 @@ public class PlatformerPhysics : MonoBehaviour
 	bool mCrouching						= false;	//Are we crouching or not?
 	bool mTryingToUncrouch				= false;	//Are we trying to get out of crouch at the moment?
 	bool mDashing						= false;
+	bool mAttackMovementLocked			= false;
+	bool mPreserveAttackMomentum		= false;
 	bool mFastFallHeld					= false;
 	float mDashCooldownLeft				= 0.0f;
 	float mDashDirection					= 0.0f;
@@ -110,6 +112,8 @@ public class PlatformerPhysics : MonoBehaviour
 		mOnGround = false;
 		mSprinting = false;
 		mDashing = false;
+		mAttackMovementLocked = false;
+		mPreserveAttackMomentum = false;
 		mFastFallHeld = false;
 		mDashCooldownLeft = 0.0f;
 		mDashDirection = 0.0f;
@@ -153,11 +157,18 @@ public class PlatformerPhysics : MonoBehaviour
 		ApplyGravity();
 		ApplyMovementFriction();
 		UpdateDash();
+		ApplyAttackMovementLock();
 	}
 
     //Called when the player presses a walking button (direction -1.0f is full left, and 1.0f is full right)
 	public void Walk(float direction) 
 	{
+		if (mAttackMovementLocked)
+		{
+			mWalkInput = 0.0f;
+			return;
+		}
+
 		mWalkInput = direction;
 
 		if (IsDashing())
@@ -371,7 +382,7 @@ public class PlatformerPhysics : MonoBehaviour
 
 	public bool Dash(float direction)
 	{
-		if (!mOnGround || mCrouching || IsDashing() || mDashCooldownLeft > 0.0f || Mathf.Abs(direction) <= 0.01f)
+		if (mAttackMovementLocked || !mOnGround || mCrouching || IsDashing() || mDashCooldownLeft > 0.0f || Mathf.Abs(direction) <= 0.01f)
 			return false;
 
 		mDashDirection = Mathf.Sign(direction);
@@ -396,6 +407,15 @@ public class PlatformerPhysics : MonoBehaviour
 		return true;
 	}
 
+	public void FaceDirection(float direction)
+	{
+		if (Mathf.Abs(direction) <= 0.01f)
+			return;
+
+		mGoingRight = direction > 0.0f;
+		SendAnimMessage(mGoingRight ? "GoRight" : "GoLeft");
+	}
+
 	public void SetFastFallHeld(bool held)
 	{
 		mFastFallHeld = held;
@@ -404,6 +424,46 @@ public class PlatformerPhysics : MonoBehaviour
 	public void CancelDash()
 	{
 		StopDash();
+	}
+
+	// Regular attacks pass false so they stop immediately. A future dash attack
+	// can pass true to lock steering without discarding its entry momentum.
+	public void BeginAttackMovement(bool preserveHorizontalMomentum)
+	{
+		mAttackMovementLocked = true;
+		mPreserveAttackMomentum = preserveHorizontalMomentum;
+		mWalkInput = 0.0f;
+
+		if (preserveHorizontalMomentum)
+			return;
+
+		StopDash();
+		StopHorizontalMovement();
+	}
+
+	public void EndAttackMovement()
+	{
+		mAttackMovementLocked = false;
+		mPreserveAttackMomentum = false;
+	}
+
+	void ApplyAttackMovementLock()
+	{
+		if (!mAttackMovementLocked || mPreserveAttackMomentum)
+			return;
+
+		StopHorizontalMovement();
+	}
+
+	void StopHorizontalMovement()
+	{
+		Rigidbody body = GetComponent<Rigidbody>();
+		Vector3 velocity = body.linearVelocity;
+		velocity.x = 0.0f;
+		if (mOnGround && !mInJump)
+			velocity.y = 0.0f;
+		body.linearVelocity = velocity;
+		mStoppingForce = 1.0f;
 	}
 
 
@@ -515,9 +575,10 @@ public class PlatformerPhysics : MonoBehaviour
 
 		Vector3 velocity = GetComponent<Rigidbody>().linearVelocity;
 		bool preserveSlideMomentum = mOnGround && mCrouching;
+		bool preserveAttackMomentum = mAttackMovementLocked && mPreserveAttackMomentum;
 
 		//Apply ground friction
-		if (mOnGround && mStoppingForce > 0.0f && !preserveSlideMomentum)
+		if (mOnGround && mStoppingForce > 0.0f && !preserveSlideMomentum && !preserveAttackMomentum)
 		{
 			Vector3 velocityInGroundDir = Vector3.Dot(velocity, mGroundDirection) * mGroundDirection; //project velocity on ground direction
 			Vector3 newVelocityInGroundDir = velocityInGroundDir * Mathf.Lerp(1.0f, moveFriction, mStoppingForce); //apply ground friction on velocity
@@ -525,7 +586,7 @@ public class PlatformerPhysics : MonoBehaviour
 		}
 
 		//Apply air friction
-		if (!preserveSlideMomentum)
+		if (!preserveSlideMomentum && !preserveAttackMomentum)
 			velocity *= airFriction;
 
 		float absSpeed = Mathf.Abs(velocity.x);
@@ -537,11 +598,11 @@ public class PlatformerPhysics : MonoBehaviour
 		if (preserveSlideMomentum)
 			maxSpeed = Mathf.Max(maxSpeed, mSlideEntrySpeed);
 
-		if (absSpeed > maxSpeed)
+		if (!preserveAttackMomentum && absSpeed > maxSpeed)
 			velocity.x *= maxSpeed / absSpeed;
 
 		//Apply minimum speed
-		if (!preserveSlideMomentum && absSpeed < speedToStopAt && mStoppingForce == 1.0f)
+		if (!preserveSlideMomentum && !preserveAttackMomentum && absSpeed < speedToStopAt && mStoppingForce == 1.0f)
 			velocity.x = 0;
 
 		//Keep grounded velocity tangent to the surface. Without this, uphill vertical

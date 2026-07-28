@@ -20,8 +20,19 @@ public class PlatformerController : MonoBehaviour
 	public float dashTapThreshold = 0.75f;
 	public float dashTapReleaseThreshold = 0.35f;
 	public float dashDoubleTapWindow = 0.28f;
+	[Tooltip("Horizontal input required for a directional side punch.")]
+	public float sideAttackDirectionThreshold = 0.25f;
+	[Tooltip("A fresh stick flick at or above this amount can trigger a side smash.")]
+	public float sideSmashStickThreshold = 0.9f;
+	[Tooltip("The stick must return below this amount before another smash flick can be registered.")]
+	public float sideSmashStickReleaseThreshold = 0.35f;
+	[Tooltip("Maximum time for the stick to travel from neutral to the smash threshold.")]
+	public float sideSmashFlickTime = 0.1f;
+	[Tooltip("Maximum time between a directional smash input and the B-button press.")]
+	public float sideSmashInputWindow = 0.08f;
 
 	PlatformerPhysics mPlayer;
+	PlatformerAnimation mPlayerAnimation;
 	bool mHasControl;
 	bool mControllerDownHeld;
 	bool mTaunting;
@@ -32,6 +43,11 @@ public class PlatformerController : MonoBehaviour
 	bool mDashTapHeld;
 	int mLastDashTapDirection;
 	float mLastDashTapTime = float.NegativeInfinity;
+	bool mSideSmashStickReady = true;
+	int mSideSmashFlickDirection;
+	float mSideSmashFlickStartTime = float.NegativeInfinity;
+	int mLastSideSmashDirection;
+	float mLastSideSmashTime = float.NegativeInfinity;
 	float mJumpBufferTimeLeft;
 	Vector2 mMovementInput;
 	Vector2 mRawLeftStickInput;
@@ -40,8 +56,11 @@ public class PlatformerController : MonoBehaviour
 	{
 		mHasControl = true;
 		mPlayer = GetComponent<PlatformerPhysics>();
+		mPlayerAnimation = GetComponent<PlatformerAnimation>();
 		if (mPlayer == null)
 			Debug.LogError("This object also needs a PlatformerPhysics component attached for the controller to function properly");
+		if (mPlayerAnimation == null)
+			Debug.LogError("This object also needs a PlatformerAnimation component attached for side attacks to function properly");
 	}
 
 	void Update () 
@@ -53,6 +72,7 @@ public class PlatformerController : MonoBehaviour
 		UpdateInputState();
 		bool movementPressed = HasMovementInput(mMovementInput);
 
+		HandleSideAttackInput();
 		HandleTauntInput(movementPressed, mJumpHeld);
 		if (mTaunting)
 		{
@@ -133,6 +153,11 @@ public class PlatformerController : MonoBehaviour
 		mDashTapHeld = false;
 		mLastDashTapDirection = 0;
 		mLastDashTapTime = float.NegativeInfinity;
+		mSideSmashStickReady = true;
+		mSideSmashFlickDirection = 0;
+		mSideSmashFlickStartTime = float.NegativeInfinity;
+		mLastSideSmashDirection = 0;
+		mLastSideSmashTime = float.NegativeInfinity;
 		mJumpBufferTimeLeft = 0.0f;
 		mMovementInput = Vector2.zero;
 		mRawLeftStickInput = Vector2.zero;
@@ -142,6 +167,7 @@ public class PlatformerController : MonoBehaviour
 	void UpdateInputState()
 	{
 		mMovementInput = ReadMovementInput();
+		UpdateSideSmashInputState();
 		mJumpHeld = IsJumpHeld(mMovementInput);
 
 		if (IsJumpPressedThisFrame(mMovementInput, mJumpHeld))
@@ -268,6 +294,107 @@ public class PlatformerController : MonoBehaviour
 	}
 
 	float GetDashDirectionalInput()
+	{
+		Keyboard keyboard = Keyboard.current;
+		if (keyboard != null)
+		{
+			bool leftPressed = IsPressed(keyboard.leftArrowKey) || IsPressed(keyboard.aKey);
+			bool rightPressed = IsPressed(keyboard.rightArrowKey) || IsPressed(keyboard.dKey);
+			if (leftPressed != rightPressed)
+				return leftPressed ? -1.0f : 1.0f;
+		}
+
+		return mRawLeftStickInput.x;
+	}
+
+	void UpdateSideSmashInputState()
+	{
+		Keyboard keyboard = Keyboard.current;
+		if (keyboard != null)
+		{
+			bool leftPressed = WasPressedThisFrame(keyboard.leftArrowKey) || WasPressedThisFrame(keyboard.aKey);
+			bool rightPressed = WasPressedThisFrame(keyboard.rightArrowKey) || WasPressedThisFrame(keyboard.dKey);
+			if (leftPressed != rightPressed)
+				RecordSideSmashInput(leftPressed ? -1 : 1);
+		}
+
+		float stickMagnitude = Mathf.Abs(mRawLeftStickInput.x);
+		if (stickMagnitude <= sideSmashStickReleaseThreshold)
+		{
+			mSideSmashStickReady = true;
+			mSideSmashFlickDirection = 0;
+			mSideSmashFlickStartTime = float.NegativeInfinity;
+			return;
+		}
+
+		if (!mSideSmashStickReady)
+			return;
+
+		int stickDirection = mRawLeftStickInput.x < 0.0f ? -1 : 1;
+		if (stickDirection != mSideSmashFlickDirection)
+		{
+			mSideSmashFlickDirection = stickDirection;
+			mSideSmashFlickStartTime = Time.unscaledTime;
+		}
+
+		if (stickMagnitude >= sideSmashStickThreshold)
+		{
+			mSideSmashStickReady = false;
+			if (Time.unscaledTime - mSideSmashFlickStartTime <= sideSmashFlickTime)
+				RecordSideSmashInput(stickDirection);
+		}
+	}
+
+	void RecordSideSmashInput(int direction)
+	{
+		mLastSideSmashDirection = direction;
+		mLastSideSmashTime = Time.unscaledTime;
+	}
+
+	void HandleSideAttackInput()
+	{
+		if (mPlayerAnimation == null || !WasSideAttackPressedThisFrame())
+			return;
+
+		float directionalInput = GetSideAttackDirectionalInput();
+		int direction = Mathf.Abs(directionalInput) >= Mathf.Max(0.01f, sideAttackDirectionThreshold)
+			? (directionalInput < 0.0f ? -1 : 1)
+			: 0;
+		bool smashPressed =
+			direction != 0 &&
+			direction == mLastSideSmashDirection &&
+			Time.unscaledTime - mLastSideSmashTime <= sideSmashInputWindow;
+
+		StopTaunt();
+
+		if (smashPressed)
+		{
+			if (mPlayerAnimation.StartSideSmash(direction))
+			{
+				mLastSideSmashDirection = 0;
+				mLastSideSmashTime = float.NegativeInfinity;
+			}
+
+			return;
+		}
+
+		if (direction != 0)
+			mPlayerAnimation.StartSidePunch(direction);
+		else
+			mPlayerAnimation.StartSideJab(0);
+	}
+
+	bool WasSideAttackPressedThisFrame()
+	{
+		Keyboard keyboard = Keyboard.current;
+		if (keyboard != null && WasPressedThisFrame(keyboard.bKey))
+			return true;
+
+		Gamepad gamepad = Gamepad.current;
+		return gamepad != null && WasPressedThisFrame(gamepad.buttonEast);
+	}
+
+	float GetSideAttackDirectionalInput()
 	{
 		Keyboard keyboard = Keyboard.current;
 		if (keyboard != null)

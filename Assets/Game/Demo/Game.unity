@@ -945,9 +945,16 @@ MonoBehaviour:
   wallState: wall_grab
   tauntState: taunt
   deathState: die
+  sideJabState: side_jab
+  sidePunchState: side_punch
+  sideSmashState: side_smash
   idleSpeedThreshold: 0.1
   sprintSpeedThreshold: 0.1
   crossFadeTime: 0.08
+  sideAttackCrossFadeTime: 0.04
+  sideJabAnimationSpeed: 5
+  sidePunchAnimationSpeed: 7
+  sideSmashAnimationSpeed: 1
   airborneCrossFadeTime: 0.02
   jumpAnimationStartTime: 0.25
   walkPlaybackScale: 0.075
@@ -1005,6 +1012,11 @@ MonoBehaviour:
   dashTapThreshold: 0.75
   dashTapReleaseThreshold: 0.35
   dashDoubleTapWindow: 0.28
+  sideAttackDirectionThreshold: 0.25
+  sideSmashStickThreshold: 0.9
+  sideSmashStickReleaseThreshold: 0.35
+  sideSmashFlickTime: 0.1
+  sideSmashInputWindow: 0.08
 --- !u!114 &117
 MonoBehaviour:
   m_ObjectHideFlags: 0

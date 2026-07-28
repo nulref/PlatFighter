@@ -12,6 +12,7 @@ public static class FloatyMecanimMigrator
 	const string PlayerPrefabPath = "Assets/Game/Prefabs/Characters/Player.prefab";
 	const string DemoScenePath = "Assets/Game/Demo/Game.unity";
 	const string PlayerName = "Player";
+	const float FloatyModelImportScale = 3.0f;
 	const float FloatySlideModelOffsetY = -1.26f;
 	const float FloatySlideContactOffset = 0.04f;
 	const float FloatyFootSoleOffset = 0.11f;
@@ -51,6 +52,9 @@ public static class FloatyMecanimMigrator
 		new FloatyClip("wall_grab", FloatyFolder + "/floaty_wall_grab.fbx", false),
 		new FloatyClip("slide", FloatyFolder + "/floaty_slide.fbx", false),
 		new FloatyClip("taunt", FloatyFolder + "/floaty_taunt.fbx", true),
+		new FloatyClip("side_jab", FloatyFolder + "/floaty_side_jab.fbx", false),
+		new FloatyClip("side_punch", FloatyFolder + "/floaty_side_punch.fbx", false),
+		new FloatyClip("side_smash", FloatyFolder + "/floaty_side_smash.fbx", false),
 		new FloatyClip("die", FloatyFolder + "/floaty_die.fbx", false)
 	};
 
@@ -122,6 +126,7 @@ public static class FloatyMecanimMigrator
 
 		importer.animationType = ModelImporterAnimationType.Generic;
 		importer.importAnimation = true;
+		importer.globalScale = FloatyModelImportScale;
 		importer.optimizeGameObjects = false;
 		importer.indexFormat = ModelImporterIndexFormat.UInt32;
 		importer.animationWrapMode = clipInfo.Loop ? WrapMode.Loop : WrapMode.Default;
@@ -337,6 +342,9 @@ public static class FloatyMecanimMigrator
 			platformerAnimation.dashState = "dash";
 			platformerAnimation.deathState = "die";
 			platformerAnimation.wallState = "wall_grab";
+			platformerAnimation.sideJabState = "side_jab";
+			platformerAnimation.sidePunchState = "side_punch";
+			platformerAnimation.sideSmashState = "side_smash";
 			platformerAnimation.airborneCrossFadeTime = FloatyAirborneCrossFadeTime;
 			platformerAnimation.jumpAnimationStartTime = FloatyJumpAnimationStartTime;
 			platformerAnimation.slideModelOffset = new Vector3(0.0f, FloatySlideModelOffsetY, 0.0f);

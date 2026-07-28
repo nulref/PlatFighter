@@ -1,5 +1,5 @@
 fileFormatVersion: 2
-guid: 6549d1860bcd6e24db83f075163d9314
+guid: 85dc00c74087d5144a6fcfcd0319dc95
 ModelImporter:
   serializedVersion: 24300
   internalIDToNameTable: []
@@ -16,10 +16,10 @@ ModelImporter:
     resampleCurves: 1
     optimizeGameObjects: 0
     removeConstantScaleCurves: 0
-    motionNodeName:
-    animationImportErrors:
-    animationImportWarnings:
-    animationRetargetingWarnings:
+    motionNodeName: 
+    animationImportErrors: 
+    animationImportWarnings: 
+    animationRetargetingWarnings: 
     animationDoRetargetingWarnings: 0
     importAnimatedCustomProperties: 0
     importConstraints: 0
@@ -32,11 +32,11 @@ ModelImporter:
     extraUserProperties: []
     clipAnimations:
     - serializedVersion: 16
-      name: die
-      takeName: Armature|a06e3cb4d204fe13224b8243f182f16a_remap
-      internalID: -4610677256658863890
+      name: side_smash
+      takeName: Armature|31d8bc8bf43cf7fecf8ebb4ede1598a4_remap
+      internalID: -4096075546630560641
       firstFrame: 0
-      lastFrame: 141
+      lastFrame: 160
       wrapMode: 0
       orientationOffsetY: 0
       level: 0
@@ -122,7 +122,7 @@ ModelImporter:
     legStretch: 0.05
     feetSpacing: 0
     globalScale: 0.03
-    rootMotionBoneName:
+    rootMotionBoneName: 
     hasTranslationDoF: 0
     hasExtraRoot: 0
     skeletonHasParents: 1
@@ -135,6 +135,6 @@ ModelImporter:
   importBlendShapeDeformPercent: 1
   remapMaterialsIfMaterialImportModeIsNone: 0
   additionalBone: 0
-  userData:
-  assetBundleName:
-  assetBundleVariant:
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

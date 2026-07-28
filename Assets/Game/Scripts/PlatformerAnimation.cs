@@ -22,11 +22,25 @@ public class PlatformerAnimation : MonoBehaviour
 	public string wallState = "wall_grab";
 	public string tauntState = "taunt";
 	public string deathState = "die";
+	public string sideJabState = "side_jab";
+	public string sidePunchState = "side_punch";
+	public string sideSmashState = "side_smash";
 
 	public float idleSpeedThreshold = 0.1f;
 	[FormerlySerializedAs("runSpeedThreshold")]
 	public float sprintSpeedThreshold = 0.1f;
 	public float crossFadeTime = 0.08f;
+	[Tooltip("Fixed-duration blend, in seconds, used when entering a side attack.")]
+	public float sideAttackCrossFadeTime = 0.04f;
+	[Min(0.01f)]
+	[Tooltip("Playback multiplier for the side jab animation. A value of 1 uses the imported speed.")]
+	public float sideJabAnimationSpeed = 1.0f;
+	[Min(0.01f)]
+	[Tooltip("Playback multiplier for the side punch animation. A value of 1 uses the imported speed.")]
+	public float sidePunchAnimationSpeed = 1.0f;
+	[Min(0.01f)]
+	[Tooltip("Playback multiplier for the side smash animation. A value of 1 uses the imported speed.")]
+	public float sideSmashAnimationSpeed = 1.0f;
 	[Tooltip("Fixed-duration blend, in seconds, used when entering jump, double-jump, and wall-jump animations.")]
 	public float airborneCrossFadeTime = 0.02f;
 	[Tooltip("Time, in seconds, skipped at the start of the regular and wall-jump animation.")]
@@ -74,7 +88,12 @@ public class PlatformerAnimation : MonoBehaviour
 	bool mUseAnimator = false;
 	bool mAnimatorPaused = false;
 	bool mTaunting = false;
+	bool mSideAttacking = false;
+	bool mSideAttackAnimationEntered = false;
 	float mAnimatorSpeedBeforePause = 1.0f;
+	float mAnimatorSpeedBeforeSideAttack = 1.0f;
+	float mLegacySpeedBeforeSideAttack = 1.0f;
+	float mSideAttackStartTime = float.NegativeInfinity;
 	Vector3 mBaseModelLocalPosition = Vector3.zero;
 	Quaternion mBaseModelLocalRotation = Quaternion.identity;
 	Transform[] mFootGroundingPoints = new Transform[0];
@@ -83,6 +102,7 @@ public class PlatformerAnimation : MonoBehaviour
 	float mGroundSlopeLeanVelocity = 0.0f;
 	string mCurrentAnimatorState = "";
 	string mAirborneAnimatorState = "";
+	string mSideAttackAnimatorState = "";
 
 	bool mHasSpeedParameter = false;
 	bool mHasNormalizedSpeedParameter = false;
@@ -260,7 +280,7 @@ public class PlatformerAnimation : MonoBehaviour
 
 	float GetTargetGroundSlopeLeanAngle()
 	{
-		if (!mUseAnimator || mPhysics == null || mPlayerDead || mTaunting || !mPhysics.IsOnGround())
+		if (!mUseAnimator || mPhysics == null || mPlayerDead || mTaunting || mSideAttacking || !mPhysics.IsOnGround())
 		{
 			return 0.0f;
 		}
@@ -312,11 +332,14 @@ public class PlatformerAnimation : MonoBehaviour
 	void ApplyGroundedFootOffset()
 	{
 		bool sliding = mPhysics != null && mPhysics.IsCrouching() && IsSlideState();
-		bool groundedLocomotion = mPhysics != null && !mPhysics.IsCrouching() && IsGroundedLocomotionState();
+		bool groundedStandingAnimation =
+			mPhysics != null &&
+			!mPhysics.IsCrouching() &&
+			(IsGroundedLocomotionState() || mSideAttacking);
 		Transform[] groundingPoints = sliding ? mSlideGroundingPoints : mFootGroundingPoints;
 		if (!groundLocomotionFeet || !mUseAnimator || mPhysics == null ||
 			!mPhysics.IsOnGround() || mPlayerDead || mTaunting ||
-			groundingPoints.Length == 0 || (!sliding && !groundedLocomotion))
+			groundingPoints.Length == 0 || (!sliding && !groundedStandingAnimation))
 		{
 			return;
 		}
@@ -376,7 +399,7 @@ public class PlatformerAnimation : MonoBehaviour
 		bool crouching = grounded && mPhysics != null && mPhysics.IsCrouching();
 		bool sprinting = mPhysics != null && mPhysics.IsSprinting();
 		bool dashing = mPhysics != null && mPhysics.IsDashing();
-		SetWallGrabPropActive(onWall && !mPlayerDead && !mTaunting && !crouching && !dashing);
+		SetWallGrabPropActive(onWall && !mPlayerDead && !mTaunting && !mSideAttacking && !crouching && !dashing);
 
 		SetAnimatorFloat(mHasSpeedParameter, SpeedHash, speed);
 		float normalizedWalkSpeed = speed * walkPlaybackScale;
@@ -393,6 +416,9 @@ public class PlatformerAnimation : MonoBehaviour
 		SetAnimatorBool(mHasDeadParameter, DeadHash, mPlayerDead);
 
 		if (mPlayerDead)
+			return;
+
+		if (UpdateSideAttackAnimatorState())
 			return;
 
 		if (mTaunting)
@@ -454,7 +480,10 @@ public class PlatformerAnimation : MonoBehaviour
 			return;
 
 		SetWallGrabPropActive(
-			mPhysics != null && mPhysics.IsOnWall() && !mPlayerDead && !mTaunting);
+			mPhysics != null && mPhysics.IsOnWall() && !mPlayerDead && !mTaunting && !mSideAttacking);
+
+		if (UpdateSideAttackLegacyState())
+			return;
 
 		if (mTaunting)
 		{
@@ -479,6 +508,196 @@ public class PlatformerAnimation : MonoBehaviour
 			mIdle = false;
 			mLegacyAnimation.CrossFade("walk");
 		}
+	}
+
+	bool UpdateSideAttackAnimatorState()
+	{
+		if (!mSideAttacking)
+			return false;
+
+		ResetModelOffset();
+		ApplySideAttackAnimationSpeed();
+		if (animatedPlayerAnimator == null || string.IsNullOrEmpty(mSideAttackAnimatorState))
+		{
+			FinishSideAttack();
+			return false;
+		}
+
+		float animatorStartGrace = Mathf.Max(0.25f, sideAttackCrossFadeTime + 0.1f);
+		bool waitingForAttackState = Time.unscaledTime - mSideAttackStartTime <= animatorStartGrace;
+		if (animatedPlayerAnimator.IsInTransition(0))
+		{
+			if (!mSideAttackAnimationEntered && !waitingForAttackState)
+			{
+				FinishSideAttack();
+				return false;
+			}
+
+			return true;
+		}
+
+		AnimatorStateInfo stateInfo = animatedPlayerAnimator.GetCurrentAnimatorStateInfo(0);
+		if (stateInfo.shortNameHash != Animator.StringToHash(mSideAttackAnimatorState))
+		{
+			if (!mSideAttackAnimationEntered && waitingForAttackState)
+				return true;
+
+			FinishSideAttack();
+			return false;
+		}
+
+		mSideAttackAnimationEntered = true;
+		if (stateInfo.normalizedTime < 1.0f)
+			return true;
+
+		FinishSideAttack();
+		return false;
+	}
+
+	bool UpdateSideAttackLegacyState()
+	{
+		if (!mSideAttacking)
+			return false;
+
+		ResetModelOffset();
+		ApplySideAttackAnimationSpeed();
+		AnimationState attackState = mLegacyAnimation != null
+			? mLegacyAnimation[mSideAttackAnimatorState]
+			: null;
+		if (attackState != null && attackState.enabled && attackState.normalizedTime < 1.0f)
+			return true;
+
+		FinishSideAttack();
+		return false;
+	}
+
+	public bool StartSideJab(int direction)
+	{
+		return StartSideAttack(sideJabState, direction);
+	}
+
+	public bool StartSidePunch(int direction)
+	{
+		return StartSideAttack(sidePunchState, direction);
+	}
+
+	public bool StartSideSmash(int direction)
+	{
+		return StartSideAttack(sideSmashState, direction);
+	}
+
+	bool StartSideAttack(string stateName, int direction)
+	{
+		if (mPlayerDead || mSideAttacking || string.IsNullOrEmpty(stateName))
+			return false;
+
+		if (mUseAnimator)
+		{
+			if (!HasAnimatorState(stateName))
+			{
+				Debug.LogWarning("Could not start side attack because Animator state '" + stateName + "' was not found.");
+				return false;
+			}
+		}
+		else if (mLegacyAnimation == null || mLegacyAnimation[stateName] == null)
+		{
+			Debug.LogWarning("Could not start side attack because legacy animation '" + stateName + "' was not found.");
+			return false;
+		}
+
+		mTaunting = false;
+		mSideAttacking = true;
+		mSideAttackAnimationEntered = false;
+		mSideAttackAnimatorState = stateName;
+		mSideAttackStartTime = Time.unscaledTime;
+		if (mPhysics != null)
+			mPhysics.BeginAttackMovement(false);
+		SetWallGrabPropActive(false);
+		ResumeAnimator();
+		if (mUseAnimator && animatedPlayerAnimator != null)
+			mAnimatorSpeedBeforeSideAttack = animatedPlayerAnimator.speed;
+		else if (mLegacyAnimation != null && mLegacyAnimation[stateName] != null)
+			mLegacySpeedBeforeSideAttack = mLegacyAnimation[stateName].speed;
+		ApplySideAttackAnimationSpeed();
+		ResetModelOffset();
+
+		if (direction != 0)
+		{
+			if (mPhysics != null)
+				mPhysics.FaceDirection(direction);
+			else if (direction < 0)
+				GoLeft();
+			else
+				GoRight();
+		}
+
+		if (mUseAnimator)
+		{
+			// CrossFade can ignore a request made while the Animator is already
+			// transitioning away from the previous attack. Restart directly in
+			// that case so rapid taps cannot leave the attack lock orphaned.
+			float attackFadeTime = animatedPlayerAnimator.IsInTransition(0)
+				? 0.0f
+				: sideAttackCrossFadeTime;
+			PlayAnimatorState(stateName, attackFadeTime, true);
+		}
+		else
+			PlayLegacyAnimation(stateName);
+
+		return true;
+	}
+
+	void ApplySideAttackAnimationSpeed()
+	{
+		float playbackSpeed = 1.0f;
+		if (mSideAttackAnimatorState == sideJabState)
+			playbackSpeed = sideJabAnimationSpeed;
+		else if (mSideAttackAnimatorState == sidePunchState)
+			playbackSpeed = sidePunchAnimationSpeed;
+		else if (mSideAttackAnimatorState == sideSmashState)
+			playbackSpeed = sideSmashAnimationSpeed;
+
+		playbackSpeed = Mathf.Max(0.01f, playbackSpeed);
+		if (mUseAnimator)
+		{
+			if (animatedPlayerAnimator != null)
+				animatedPlayerAnimator.speed = playbackSpeed;
+			return;
+		}
+
+		if (mLegacyAnimation != null && mLegacyAnimation[mSideAttackAnimatorState] != null)
+			mLegacyAnimation[mSideAttackAnimatorState].speed = playbackSpeed;
+	}
+
+	bool HasAnimatorState(string stateName)
+	{
+		if (animatedPlayerAnimator == null || animatedPlayerAnimator.layerCount == 0)
+			return false;
+
+		int shortNameHash = Animator.StringToHash(stateName);
+		string layerName = animatedPlayerAnimator.GetLayerName(0);
+		int fullPathHash = Animator.StringToHash(layerName + "." + stateName);
+		return animatedPlayerAnimator.HasState(0, shortNameHash) ||
+			animatedPlayerAnimator.HasState(0, fullPathHash);
+	}
+
+	void FinishSideAttack()
+	{
+		bool wasSideAttacking = mSideAttacking;
+		string finishedState = mSideAttackAnimatorState;
+		mSideAttacking = false;
+		mSideAttackAnimationEntered = false;
+		mSideAttackAnimatorState = "";
+		mSideAttackStartTime = float.NegativeInfinity;
+		if (wasSideAttacking)
+		{
+			if (mUseAnimator && animatedPlayerAnimator != null)
+				animatedPlayerAnimator.speed = mAnimatorSpeedBeforeSideAttack;
+			else if (mLegacyAnimation != null && mLegacyAnimation[finishedState] != null)
+				mLegacyAnimation[finishedState].speed = mLegacySpeedBeforeSideAttack;
+		}
+		if (wasSideAttacking && mPhysics != null)
+			mPhysics.EndAttackMovement();
 	}
 
 	void SetAnimatorFloat(bool hasParameter, int parameterHash, float value)
@@ -576,7 +795,7 @@ public class PlatformerAnimation : MonoBehaviour
 
 	void PlayLocomotionState()
 	{
-		if (mTaunting)
+		if (mTaunting || mSideAttacking)
 			return;
 
 		if (mUseAnimator)
@@ -606,6 +825,7 @@ public class PlatformerAnimation : MonoBehaviour
 	public void PlayerDied()
 	{
 		mTaunting = false;
+		FinishSideAttack();
 		SetWallGrabPropActive(false);
 		ResetModelOffset();
 
@@ -627,6 +847,7 @@ public class PlatformerAnimation : MonoBehaviour
 		GoRight();
 		ResumeAnimator();
 		mTaunting = false;
+		FinishSideAttack();
 		SetWallGrabPropActive(false);
 		ResetModelOffset();
 		mPlayerDead = false;
@@ -657,6 +878,9 @@ public class PlatformerAnimation : MonoBehaviour
 		ResetModelOffset();
 		mAirborneAnimatorState = stateName;
 
+		if (mSideAttacking)
+			return;
+
 		if (mUseAnimator)
 			PlayAnimatorState(stateName, airborneCrossFadeTime, true, true, fixedTimeOffset);
 		else
@@ -667,6 +891,9 @@ public class PlatformerAnimation : MonoBehaviour
 	{
 		mTaunting = false;
 		SetWallGrabPropActive(false);
+
+		if (mSideAttacking)
+			return;
 
 		if (mUseAnimator)
 		{
@@ -682,6 +909,9 @@ public class PlatformerAnimation : MonoBehaviour
 
 	void StoppedCrouching()
 	{
+		if (mSideAttacking)
+			return;
+
 		ResetModelOffset();
 
 		if (mUseAnimator)
@@ -715,7 +945,7 @@ public class PlatformerAnimation : MonoBehaviour
 
 	void LandedOnWall()
 	{
-		if (mTaunting)
+		if (mTaunting || mSideAttacking)
 			return;
 
 		mAirborneAnimatorState = "";
@@ -768,7 +998,7 @@ public class PlatformerAnimation : MonoBehaviour
 
 	void StartedDash()
 	{
-		if (mPlayerDead)
+		if (mPlayerDead || mSideAttacking)
 			return;
 
 		mTaunting = false;
@@ -790,7 +1020,7 @@ public class PlatformerAnimation : MonoBehaviour
 
 	void StartedTaunt()
 	{
-		if (mPlayerDead)
+		if (mPlayerDead || mSideAttacking)
 			return;
 
 		ResumeAnimator();
